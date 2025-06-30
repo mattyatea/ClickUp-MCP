@@ -1,0 +1,7 @@
+# ClickUp OAuth設定
+CLICKUP_CLIENT_ID=your-clickup-client-id-here
+CLICKUP_CLIENT_SECRET=your-clickup-client-secret-here
+
+# Cookie暗号化キー（32文字のランダムな文字列）
+# 以下のコマンドで生成できます: openssl rand -hex 32
+COOKIE_ENCRYPTION_KEY=abcdef1234567890abcdef1234567890
