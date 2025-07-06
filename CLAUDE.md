@@ -1,140 +1,267 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides comprehensive guidance to Claude Code (claude.ai/code) when working with code in this repository. It serves as a reference for understanding the project structure, development workflow, and architectural patterns.
 
 ## Project Overview
 
-This is a ClickUp MCP (Model Context Protocol) Server built with Cloudflare Workers that provides OAuth authentication and MCP tools for ClickUp integration. The server uses Cloudflare's AgentsSDK for real-time communication and supports comprehensive ClickUp API operations.
+**Project Name**: ClickUp MCP Server  
+**Type**: Cloudflare Workers-based OAuth MCP Server  
+**Purpose**: Provides MCP (Model Context Protocol) tools for interacting with the ClickUp API through OAuth authentication
 
-## Key Architecture
+## Common Commands
 
-### Core Components
+### Development Commands
+- `pnpm dev` - Start local development server with Wrangler (port 8788)
+- `pnpm start` - Alternative start command (same as dev)
+- `pnpm type-check` - Run TypeScript type checking without emitting files
+- `pnpm deploy` - Deploy to Cloudflare Workers
+- `pnpm cf-typegen` - Generate TypeScript types from Wrangler configuration
 
-- **Main Entry Point**: `src/index.ts` - Extends `McpAgent` from Cloudflare's AgentsSDK to provide ClickUp-specific MCP tools
-- **OAuth Handler**: `src/clickup-handler.ts` - Handles ClickUp OAuth 2.0 authentication flow
-- **ClickUp Service**: `src/services/clickup-service.ts` - Centralized service for all ClickUp API interactions
-- **Configuration**: `src/config.ts` - Application configuration and ClickUp API constants
-- **Types**: `src/types.ts` - TypeScript type definitions for the entire project
+### Cloudflare Workers Commands
+- `npx wrangler secret put CLICKUP_CLIENT_ID` - Set ClickUp OAuth client ID
+- `npx wrangler secret put CLICKUP_CLIENT_SECRET` - Set ClickUp OAuth client secret
+- `npx wrangler secret put COOKIE_ENCRYPTION_KEY` - Set cookie encryption key (32 chars)
+- `npx wrangler kv:namespace create "OAUTH_KV"` - Create KV namespace for OAuth
+- `npx wrangler dev` - Start development server locally
+- `npx wrangler deploy` - Deploy to production
+- `npx wrangler logs` - View deployment logs
+
+### Code Quality Commands
+- `npx prettier --write .` - Format code using Prettier
+- `npx tsc --noEmit` - Type check without compilation
+
+## Architecture
+
+This is a Cloudflare Workers-based OAuth MCP server that provides MCP (Model Context Protocol) tools for interacting with the ClickUp API.
 
 ### Technology Stack
 
-- **Runtime**: Cloudflare Workers with Node.js compatibility
-- **Framework**: Hono for HTTP handling, Cloudflare AgentsSDK for MCP
-- **Authentication**: OAuth 2.0 with ClickUp using `@cloudflare/workers-oauth-provider`
-- **Storage**: Cloudflare KV for OAuth state and session management
-- **Validation**: Zod for schema validation
+- **Runtime**: Cloudflare Workers (Edge Runtime)
+- **Language**: TypeScript (ES2021, strict mode)
+- **Framework**: Hono for HTTP handling
+- **OAuth**: @cloudflare/workers-oauth-provider
+- **MCP**: @modelcontextprotocol/sdk + agents/mcp
+- **API Client**: Built-in ClickUp API client
+- **Validation**: Zod schemas
+- **Package Manager**: pnpm
 
-### MCP Tools Architecture
+### Key Components
 
-The server provides 20+ MCP tools organized into categories:
-- **Authentication**: `getUserInfo`
-- **Workspace Management**: `getWorkspaces`, `getSpaces`, `getFolders`, `getListsInFolder`, `getListsInSpace`, `getAllLists`
-- **Task Management**: `getTasks`, `createTask`, `updateTask`, `deleteTask`, `getMyTasks`
-- **Time Tracking**: `startTimeTracking`, `stopTimeTracking`, `getTimeEntries`, `createTimeEntry`, `updateTimeEntry`, `deleteTimeEntry`
+- **OAuth Flow**: Uses `@cloudflare/workers-oauth-provider` for OAuth authentication with ClickUp
+- **MCP Server**: Extends `McpAgent` to provide structured API tools for ClickUp operations
+- **Durable Objects**: Uses `MyMCP` durable object class for stateful MCP sessions
+- **KV Storage**: Stores OAuth tokens and session data in Cloudflare KV
+- **MCP Communication**: Real-time MCP communication via `/sse` endpoint
 
-## Common Development Commands
+### Directory Structure
 
-```bash
-# Install dependencies
-npm install
-
-# Start development server (localhost:8788)
-npm run dev
-
-# Deploy to Cloudflare Workers
-npm run deploy
-
-# Type checking
-npm run type-check
-
-# Generate Cloudflare types
-npm run cf-typegen
 ```
+src/
+├── index.ts                    # Main application entry point
+├── config.ts                   # Configuration constants
+├── types.ts                    # TypeScript type definitions
+├── utils.ts                    # Utility functions
+├── workers-oauth-utils.ts      # OAuth-specific utilities
+├── handlers/                   # Request handlers
+│   ├── combined-handler.ts     # Main routing logic
+│   ├── oauth-handler.ts        # OAuth flow handlers
+│   └── site-handler.ts         # Site and documentation handlers
+└── tools/                      # Tools and utilities
+    ├── clickup-tools.ts        # ClickUp API client tools
+    └── error-handler.ts        # Error handling utilities
+```
+
+### Main Entry Points
+
+- `src/index.ts` - Main application entry point, exports OAuth provider and MCP agent
+- `src/handlers/combined-handler.ts` - Main routing logic that combines all handlers
+- `src/handlers/oauth-handler.ts` - OAuth flow handlers (`/authorize`, `/callback`, `/webhook/clickup` endpoints)
+- `src/handlers/site-handler.ts` - Site and documentation handlers (`/` endpoint)
+- `src/tools/clickup-tools.ts` - ClickUp API client tools with all API operations
+- `src/tools/error-handler.ts` - Error handling utilities for API responses
+
+### Core Architecture Pattern
+
+1. **OAuth Authentication**: User authenticates via ClickUp OAuth, tokens stored in KV
+2. **MCP Agent**: Authenticated sessions create MCP agents with ClickUp API access
+3. **Tool Registration**: Built-in tools for ClickUp operations are registered in the `init()` method
+4. **MCP Endpoint**: `/sse` provides persistent connection for MCP communication
+5. **Durable Objects**: Stateful sessions managed via Cloudflare Durable Objects
+
+### MCP Tool Categories
+
+- **User & Teams**: `getUserInfo`, `getWorkspaces`
+- **Hierarchy**: `getSpaces`, `getFolders`, `getListsInFolder`, `getListsInSpace`, `getAllLists`
+- **Tasks**: `getTasks`, `createTask`, `updateTask`, `deleteTask`, `getMyTasks`
+- **Time Tracking**: `startTimeTracking`, `stopTimeTracking`, `getTimeEntries`, `createTimeEntry`, `updateTimeEntry`, `deleteTimeEntry`
+- **Utilities**: `add` (basic math for testing)
+
+## Environment Configuration
+
+### Required Secrets (wrangler.jsonc)
+- `CLICKUP_CLIENT_ID` - ClickUp OAuth application client ID
+- `CLICKUP_CLIENT_SECRET` - ClickUp OAuth application client secret
+- `COOKIE_ENCRYPTION_KEY` - 32-character encryption key for cookies
+
+### Environment Variables
+- `DEV_PORT` - Development server port (default: 8788)
+
+### KV Namespaces
+- `OAUTH_KV` - Stores OAuth tokens and session data
+
+### Durable Objects
+- `MyMCP` - Handles stateful MCP sessions
+
+## OAuth Configuration
+
+### OAuth Scopes
+The application uses the default ClickUp OAuth scopes for full API access:
+- Default scope provides read/write access to workspaces, spaces, folders, lists, and tasks
+- Includes time tracking permissions for creating and managing time entries
+
+### OAuth Endpoints
+- `/authorize` - Initiates OAuth flow
+- `/callback` - Handles OAuth callback
+- `/sse` - SSE endpoint for MCP communication
 
 ## Development Workflow
 
-### Local Development Setup
+### Getting Started
+1. Install dependencies: `pnpm install`
+2. Set up secrets: `npx wrangler secret put CLICKUP_CLIENT_ID`
+3. Create KV namespace: `npx wrangler kv:namespace create "OAUTH_KV"`
+4. Start development: `pnpm dev`
 
-1. **Environment Variables**: Create `.dev.vars` file with:
-   - `CLICKUP_CLIENT_ID`
-   - `CLICKUP_CLIENT_SECRET`
-   - `COOKIE_ENCRYPTION_KEY` (32 characters)
+### Development Best Practices
+- Always run `pnpm type-check` before committing
+- Use Prettier for consistent code formatting
+- Follow TypeScript strict mode guidelines
+- Implement proper error handling using centralized error handlers
+- Use Zod schemas for input validation
 
-2. **KV Namespace**: Ensure `OAUTH_KV` namespace exists (ID: `4d19b46a963d477d9ca3b39699740072`)
+### Testing
+- Manual testing via development server
+- Type checking with `pnpm type-check`
+- Deploy to preview for integration testing
 
-3. **OAuth Configuration**: ClickUp app redirect URL should be `https://your-domain.workers.dev/callback`
+## Key Dependencies
 
-### Testing MCP Tools
+### Production Dependencies
+- `@cloudflare/workers-oauth-provider` (^0.0.5) - OAuth provider for Workers
+- `@modelcontextprotocol/sdk` (^1.13.0) - MCP protocol implementation
+- `agents` (^0.0.95) - MCP agent framework
+- `hono` (^4.8.2) - HTTP framework for request handling
+- `workers-mcp` (^0.0.13) - MCP utilities for Workers
+- `zod` (^3.25.67) - Runtime type validation for tool schemas
 
-All MCP tools require OAuth authentication via `accessToken` from `this.props.accessToken`. The tools follow a consistent pattern:
-- Zod schema validation for parameters
-- ClickUpService method calls
-- Standardized error handling with Japanese error messages
-- JSON response formatting
+### Development Dependencies
+- `@cloudflare/workers-types` (^4.20250620.0) - Cloudflare Workers type definitions
+- `prettier` (^3.5.3) - Code formatting
+- `typescript` (^5.8.3) - TypeScript compiler
+- `wrangler` (^4.20.5) - Cloudflare Workers CLI
 
-### Error Handling
+## Error Handling
 
-- All services use try-catch blocks with descriptive Japanese error messages
-- ClickUp API errors include HTTP status codes and response text
-- OAuth errors are handled by the OAuthProvider framework
+### Centralized Error Handling
+- `src/tools/error-handler.ts` - Centralized error handling for API operations
+- All tools use consistent error handling with try-catch blocks
+- OAuth errors return HTTP error responses with adaptive formatting (HTML for browsers, JSON for APIs)
+- API errors are properly formatted for MCP responses
 
-## Important Implementation Notes
+### Error Patterns
+- Try-catch blocks around all API calls
+- Proper error propagation through MCP tool responses
+- Logging for debugging and monitoring
 
-### OAuth Flow
+## TypeScript Configuration
 
-The OAuth implementation uses Cloudflare's `@cloudflare/workers-oauth-provider` with:
-- Authorization endpoint: `/authorize`
-- Token endpoint: `/token`
-- Callback endpoint: `/callback`
-- MCP endpoint: `/sse` (handled by AgentsSDK)
+### Compiler Options
+- **Target**: ES2021
+- **Module**: ES2022
+- **Module Resolution**: Bundler
+- **Strict Mode**: Enabled
+- **No Emit**: True (Workers handles bundling)
+- **Node Compatibility**: Enabled via compatibility flags
 
-### API Service Patterns
+### Type Definitions
+- Custom worker types in `worker-configuration.d.ts`
+- Zod schemas for runtime validation
+- Proper typing for MCP tools and responses
 
-When adding new ClickUp API methods to `ClickUpService`:
-1. Add appropriate TypeScript interfaces in `types.ts`
-2. Follow the existing pattern: URL construction, authorization headers, error handling
-3. Use the `ServiceDependencies` pattern for configuration access
-4. Return structured responses with proper error messages
+## Deployment
 
-### MCP Tool Development
+### Production Deployment
+1. Ensure all secrets are set in production
+2. Run `pnpm type-check` to verify code
+3. Deploy with `pnpm deploy`
+4. Monitor logs with `npx wrangler logs`
 
-When adding new MCP tools:
-1. Define Zod schema for parameters
-2. Use `this.props.accessToken` for ClickUp API authentication
-3. Call appropriate `ClickUpService` methods
-4. Return standardized `{ content: [{ text: JSON.stringify(data, null, 2), type: "text" }] }`
-5. Include comprehensive error handling with Japanese messages
+### Environment Considerations
+- Cloudflare Workers Edge Runtime
+- Durable Objects for state management
+- KV storage for OAuth tokens
+- Observability enabled for monitoring
 
-### Environment Management
+## Code Style Guidelines
 
-Production secrets are managed via Wrangler:
-```bash
-npx wrangler secret put CLICKUP_CLIENT_ID
-npx wrangler secret put CLICKUP_CLIENT_SECRET
-npx wrangler secret put COOKIE_ENCRYPTION_KEY
+### General Principles
+- Follow TypeScript strict mode
+- Use descriptive variable and function names
+- Implement proper error handling
+- Use async/await over promises
+- Prefer composition over inheritance
+
+### File Organization
+- Group related functionality in modules
+- Use barrel exports where appropriate
+- Keep handlers, tools, and utilities separate
+- Follow consistent naming conventions
+
+## Common Issues and Solutions
+
+### OAuth Issues
+- Ensure `CLICKUP_CLIENT_ID` and `CLICKUP_CLIENT_SECRET` are properly set
+- Check KV namespace configuration
+- Verify OAuth redirect URLs match ClickUp app settings
+
+### MCP Tool Issues
+- Validate input schemas with Zod
+- Use consistent error handling patterns
+- Test tool responses for proper JSON formatting
+
+### Development Issues
+- Use `pnpm dev` for local development
+- Check compatibility flags in wrangler.jsonc
+- Ensure Node.js compatibility is enabled
+
+## Task Completion Best Practices
+
+### Development Workflow
+- 全てのタスクが終了したら、pnpm type-checkを実行して型エラーがないかを確認してください。型エラーがあったら修正してください
+
+## Reference for Other Projects
+
+This CLAUDE.md structure can be adapted for other projects by:
+
+1. **Updating Project Overview** - Change project name, type, and purpose
+2. **Modifying Commands** - Replace with project-specific commands
+3. **Adapting Architecture** - Update technology stack and components
+4. **Customizing Configuration** - Update environment variables and secrets
+5. **Adjusting Dependencies** - List project-specific dependencies
+6. **Tailoring Workflows** - Adapt development and deployment processes
+
+### Template Structure
+```markdown
+# CLAUDE.md
+## Project Overview
+## Common Commands
+## Architecture
+## Environment Configuration
+## Development Workflow
+## Key Dependencies
+## Error Handling
+## [Technology-Specific Sections]
+## Code Style Guidelines
+## Common Issues and Solutions
+## Reference for Other Projects
 ```
-
-## Configuration Details
-
-### Cloudflare Workers Setup
-
-- **Compatibility Date**: `2025-03-10`
-- **Node.js Compatibility**: Enabled
-- **Durable Objects**: `MyMCP` class for MCP agent instances
-- **AI Binding**: Available for potential future use
-- **Observability**: Enabled for monitoring
-
-### ClickUp API Integration
-
-Base URL: `https://api.clickup.com/api/v2`
-- All API calls use Bearer token authentication
-- Error responses include HTTP status and response text
-- Rate limiting is handled by ClickUp's API limits
-
-## Key Files to Understand
-
-1. **`src/index.ts`**: Start here to understand the MCP server architecture and available tools
-2. **`src/services/clickup-service.ts`**: Contains all ClickUp API integration logic
-3. **`src/types.ts`**: Essential for understanding data structures
-4. **`wrangler.jsonc`**: Cloudflare Workers configuration including bindings
-5. **`package.json`**: Dependencies and available scripts

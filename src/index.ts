@@ -9,9 +9,9 @@ import OAuthProvider from "@cloudflare/workers-oauth-provider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { McpAgent } from "agents/mcp";
 import { z } from "zod";
-import { ClickUpHandler } from "./clickup-handler";
+import { CombinedHandler } from "./handlers/combined-handler";
 import { createAppConfig } from "./config";
-import { ClickUpService } from "./services/clickup-service";
+import { ClickUpTools } from "./tools/clickup-tools";
 import type { UserProps, ServiceDependencies } from "./types";
 
 /**
@@ -30,7 +30,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 			env: this.env,
 			config: createAppConfig(this.env),
 		};
-		const clickupService = new ClickUpService(deps);
+		const clickupTools = new ClickUpTools(deps);
 
 		// 基本的なテストツール
 		this.server.tool(
@@ -49,7 +49,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 			{},
 			async () => {
 				try {
-					const data = await clickupService.getUserInfo(this.props.accessToken);
+					const data = await clickupTools.getUserInfo(this.props.accessToken);
 					return {
 						content: [
 							{
@@ -71,7 +71,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 			{},
 			async () => {
 				try {
-					const data = await clickupService.getWorkspaces(this.props.accessToken);
+					const data = await clickupTools.getWorkspaces(this.props.accessToken);
 					return {
 						content: [
 							{
@@ -96,7 +96,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 			},
 			async ({ teamId, archived }: { teamId: string; archived?: boolean }) => {
 				try {
-					const data = await clickupService.getSpaces(this.props.accessToken, teamId, archived);
+					const data = await clickupTools.getSpaces(this.props.accessToken, teamId, archived);
 					return {
 						content: [
 							{
@@ -121,7 +121,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 			},
 			async ({ spaceId, archived }: { spaceId: string; archived?: boolean }) => {
 				try {
-					const data = await clickupService.getFolders(this.props.accessToken, spaceId, archived);
+					const data = await clickupTools.getFolders(this.props.accessToken, spaceId, archived);
 					return {
 						content: [
 							{
@@ -146,7 +146,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 			},
 			async ({ folderId, archived }: { folderId: string; archived?: boolean }) => {
 				try {
-					const data = await clickupService.getListsInFolder(this.props.accessToken, folderId, archived);
+					const data = await clickupTools.getListsInFolder(this.props.accessToken, folderId, archived);
 					return {
 						content: [
 							{
@@ -171,7 +171,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 			},
 			async ({ spaceId, archived }: { spaceId: string; archived?: boolean }) => {
 				try {
-					const data = await clickupService.getListsInSpace(this.props.accessToken, spaceId, archived);
+					const data = await clickupTools.getListsInSpace(this.props.accessToken, spaceId, archived);
 					return {
 						content: [
 							{
@@ -196,7 +196,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 			},
 			async ({ teamId, archived }: { teamId?: string; archived?: boolean }) => {
 				try {
-					const data = await clickupService.getAllLists(this.props.accessToken, teamId, archived);
+					const data = await clickupTools.getAllLists(this.props.accessToken, teamId, archived);
 					return {
 						content: [
 							{
@@ -222,7 +222,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 			},
 			async ({ listId, archived, page }: { listId: string; archived?: boolean; page?: number }) => {
 				try {
-					const data = await clickupService.getTasks(this.props.accessToken, listId, {
+					const data = await clickupTools.getTasks(this.props.accessToken, listId, {
 						archived,
 						page,
 					});
@@ -279,7 +279,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 					}
 					if (timeEstimate) taskData.time_estimate = timeEstimate;
 
-					const data = await clickupService.createTask(this.props.accessToken, listId, taskData);
+					const data = await clickupTools.createTask(this.props.accessToken, listId, taskData);
 					return {
 						content: [
 							{
@@ -340,7 +340,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 					}
 					if (archived !== undefined) updateData.archived = archived;
 
-					const data = await clickupService.updateTask(this.props.accessToken, taskId, updateData);
+					const data = await clickupTools.updateTask(this.props.accessToken, taskId, updateData);
 					return {
 						content: [
 							{
@@ -364,7 +364,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 			},
 			async ({ taskId }: { taskId: string }) => {
 				try {
-					const data = await clickupService.deleteTask(this.props.accessToken, taskId);
+					const data = await clickupTools.deleteTask(this.props.accessToken, taskId);
 					return {
 						content: [
 							{
@@ -389,7 +389,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 			},
 			async ({ taskId, description }: { taskId: string; description: string }) => {
 				try {
-					const data = await clickupService.startTimeTracking(this.props.accessToken, taskId, description);
+					const data = await clickupTools.startTimeTracking(this.props.accessToken, taskId, description);
 					return {
 						content: [
 							{
@@ -414,7 +414,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 			},
 			async ({ taskId, intervalId }: { taskId: string; intervalId: string }) => {
 				try {
-					const data = await clickupService.stopTimeTracking(this.props.accessToken, taskId, intervalId);
+					const data = await clickupTools.stopTimeTracking(this.props.accessToken, taskId, intervalId);
 					return {
 						content: [
 							{
@@ -438,7 +438,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 			},
 			async ({ taskId }: { taskId: string }) => {
 				try {
-					const data = await clickupService.getTimeEntries(this.props.accessToken, taskId);
+					const data = await clickupTools.getTimeEntries(this.props.accessToken, taskId);
 					return {
 						content: [
 							{
@@ -478,7 +478,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 					if (billable !== undefined) timeData.billable = billable;
 					if (tags) timeData.tags = tags;
 
-					const data = await clickupService.createTimeEntry(this.props.accessToken, taskId, timeData);
+					const data = await clickupTools.createTimeEntry(this.props.accessToken, taskId, timeData);
 					return {
 						content: [
 							{
@@ -523,7 +523,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 					if (billable !== undefined) updateData.billable = billable;
 					if (tags) updateData.tags = tags;
 
-					const data = await clickupService.updateTimeEntry(this.props.accessToken, taskId, intervalId, updateData);
+					const data = await clickupTools.updateTimeEntry(this.props.accessToken, taskId, intervalId, updateData);
 					return {
 						content: [
 							{
@@ -548,7 +548,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 			},
 			async ({ taskId, intervalId }: { taskId: string; intervalId: string }) => {
 				try {
-					const data = await clickupService.deleteTimeEntry(this.props.accessToken, taskId, intervalId);
+					const data = await clickupTools.deleteTimeEntry(this.props.accessToken, taskId, intervalId);
 					return {
 						content: [
 							{
@@ -584,7 +584,7 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 				includeClosed?: boolean;
 			}) => {
 				try {
-					const data = await clickupService.getMyTasks(this.props.accessToken, teamId, {
+					const data = await clickupTools.getMyTasks(this.props.accessToken, teamId, {
 						archived,
 						page,
 						statuses,
@@ -614,6 +614,6 @@ export default new OAuthProvider({
 	apiRoute: "/sse",
 	authorizeEndpoint: "/authorize",
 	clientRegistrationEndpoint: "/register",
-	defaultHandler: ClickUpHandler as any,
+	defaultHandler: CombinedHandler as any,
 	tokenEndpoint: "/token",
 });

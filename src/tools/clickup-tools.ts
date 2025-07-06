@@ -1,7 +1,7 @@
 /**
- * ClickUp MCP Server - ClickUp API Service
+ * ClickUp MCP Server - ClickUp API Tools
  * 
- * ClickUp APIとの通信を担当するサービスクラス。
+ * ClickUp APIとの通信を担当するツールクラス。
  * ユーザー情報、ワークスペース、タスクなどの取得機能を提供します。
  */
 
@@ -17,7 +17,7 @@ import type {
     ClickUpListWithLocation
 } from '../types';
 
-export class ClickUpService {
+export class ClickUpTools {
     constructor(private deps: ServiceDependencies) { }
 
     /**
