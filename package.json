@@ -1,6 +1,7 @@
 {
-  "name": "clickup-sse-oauth",
+  "name": "clickup-mcp-server",
   "version": "0.0.1",
+  "description": "ClickUp MCP Server with OAuth authentication using Cloudflare Agents SDK",
   "private": true,
   "scripts": {
     "deploy": "wrangler deploy",

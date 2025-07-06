@@ -1,3 +1,10 @@
+/**
+ * ClickUp MCP Server - OAuth Handler
+ * 
+ * ClickUp OAuth認証フローを処理するHonoアプリケーション。
+ * 認証、承認、コールバック、Webhookエンドポイントを提供します。
+ */
+
 import type { AuthRequest, OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { Hono } from "hono";
 import { fetchUpstreamAuthToken, getUpstreamAuthorizeUrl } from "./utils";
@@ -6,83 +13,110 @@ import {
 	parseRedirectApproval,
 	renderApprovalDialog,
 } from "./workers-oauth-utils";
-import { createAppConfig, CLICKUP_AUTHORIZE_URL } from "./config";
-import { ClickUpService } from "./services/clickup-service";
-import { SSEService } from "./services/sse-service";
-import { handleError, createSuccessResponse, ApiError } from "./services/error-handler";
-import type { UserProps, ServiceDependencies } from "./types";
+import { SERVER_CONFIG, CLICKUP_CONFIG } from "./config";
+import { createSuccessResponse, createErrorPageResponse, createErrorResponse } from "./services/error-handler";
+import type { UserProps } from "./types";
 
 const app = new Hono<{ Bindings: Env & { OAUTH_PROVIDER: OAuthHelpers } }>();
 
-// 依存性注入のヘルパー関数
-function createServiceDependencies(env: Env): ServiceDependencies {
-	return {
-		env,
-		config: createAppConfig(env),
-	};
+/**
+ * リクエストがブラウザからかどうかを判定
+ * @param request リクエストオブジェクト
+ * @returns ブラウザからのリクエストの場合true
+ */
+function isBrowserRequest(request: Request): boolean {
+	const userAgent = request.headers.get('User-Agent') || '';
+	const accept = request.headers.get('Accept') || '';
+
+	// HTMLを受け入れるブラウザからのリクエストかチェック
+	return accept.includes('text/html') ||
+		userAgent.includes('Mozilla') ||
+		userAgent.includes('Chrome') ||
+		userAgent.includes('Safari') ||
+		userAgent.includes('Firefox') ||
+		userAgent.includes('Edge');
 }
 
-// OAuth認可エンドポイント
+/**
+ * リクエストタイプに応じたエラーレスポンスを生成
+ * @param request リクエストオブジェクト
+ * @param error エラーメッセージ
+ * @param statusCode HTTPステータスコード
+ * @param code エラーコード（オプション）
+ * @returns 適切な形式のResponseオブジェクト
+ */
+function createAdaptiveErrorResponse(
+	request: Request,
+	error: string,
+	statusCode: number = 500,
+	code?: string
+): Response {
+	if (isBrowserRequest(request)) {
+		return createErrorPageResponse(error, statusCode, code);
+	} else {
+		return createErrorResponse(error, statusCode, code);
+	}
+}
+
+/**
+ * OAuth認証開始エンドポイント
+ */
 app.get("/authorize", async (c) => {
-	try {
-		const oauthReqInfo = await c.env.OAUTH_PROVIDER.parseAuthRequest(c.req.raw);
-		const { clientId } = oauthReqInfo;
+	const oauthReqInfo = await c.env.OAUTH_PROVIDER.parseAuthRequest(c.req.raw);
+	const { clientId } = oauthReqInfo;
 
-		if (!clientId) {
-			throw new ApiError("無効なリクエストです", 400, "INVALID_CLIENT_ID");
-		}
-
-		const deps = createServiceDependencies(c.env);
-
-		if (await clientIdAlreadyApproved(c.req.raw, clientId, deps.config.cookieEncryptionKey)) {
-			return redirectToClickUp(c.req.raw, oauthReqInfo, deps);
-		}
-
-		return renderApprovalDialog(c.req.raw, {
-			client: await c.env.OAUTH_PROVIDER.lookupClient(clientId),
-			server: {
-				description: "ClickUp OAuth認証とSSEサポートを備えたMCPサーバーです。",
-				logo: "https://clickup.com/assets/brand/logo-v3-clickup-symbol-only.svg",
-				name: "ClickUp SSE MCP Server",
-			},
-			state: { oauthReqInfo },
-		});
-	} catch (error) {
-		return handleError(error);
+	if (!clientId) {
+		return createAdaptiveErrorResponse(c.req.raw, "無効なリクエストです。クライアントIDが指定されていません。", 400, "invalid_client");
 	}
+
+	// クライアントが既に承認済みかチェック
+	if (await clientIdAlreadyApproved(c.req.raw, oauthReqInfo.clientId, c.env.COOKIE_ENCRYPTION_KEY)) {
+		return redirectToClickUp(c.req.raw, oauthReqInfo, c.env);
+	}
+
+	// 承認ダイアログを表示
+	return renderApprovalDialog(c.req.raw, {
+		client: await c.env.OAUTH_PROVIDER.lookupClient(clientId),
+		server: {
+			description: SERVER_CONFIG.description,
+			logo: SERVER_CONFIG.logo,
+			name: SERVER_CONFIG.serverName,
+		},
+		state: { oauthReqInfo },
+	});
 });
 
-// OAuth認可POST処理
+/**
+ * OAuth認証承認処理エンドポイント
+ */
 app.post("/authorize", async (c) => {
-	try {
-		const deps = createServiceDependencies(c.env);
-		const { state, headers } = await parseRedirectApproval(c.req.raw, deps.config.cookieEncryptionKey);
+	// フォーム送信を検証し、状態を抽出し、次回承認ダイアログをスキップするためのSet-Cookieヘッダーを生成
+	const { state, headers } = await parseRedirectApproval(c.req.raw, c.env.COOKIE_ENCRYPTION_KEY);
 
-		if (!state.oauthReqInfo) {
-			throw new ApiError("無効なリクエストです", 400, "INVALID_STATE");
-		}
-
-		return redirectToClickUp(c.req.raw, state.oauthReqInfo, deps, headers);
-	} catch (error) {
-		return handleError(error);
+	if (!state.oauthReqInfo) {
+		return createAdaptiveErrorResponse(c.req.raw, "無効なリクエストです。認証状態が正しくありません。", 400, "invalid_state");
 	}
+
+	return redirectToClickUp(c.req.raw, state.oauthReqInfo, c.env, headers);
 });
 
-// ClickUpへのリダイレクト処理
+/**
+ * ClickUpへのリダイレクト処理
+ */
 async function redirectToClickUp(
 	request: Request,
 	oauthReqInfo: AuthRequest,
-	deps: ServiceDependencies,
+	env: Env,
 	headers: Record<string, string> = {},
 ) {
 	return new Response(null, {
 		headers: {
 			...headers,
 			location: getUpstreamAuthorizeUrl({
-				client_id: deps.config.clickupClientId,
+				client_id: env.CLICKUP_CLIENT_ID,
 				redirect_uri: new URL("/callback", request.url).href,
 				state: btoa(JSON.stringify(oauthReqInfo)),
-				upstream_url: CLICKUP_AUTHORIZE_URL,
+				upstream_url: CLICKUP_CONFIG.authorizeUrl,
 			}),
 		},
 		status: 302,
@@ -92,34 +126,62 @@ async function redirectToClickUp(
 /**
  * OAuth コールバックエンドポイント
  * 
- * ClickUpからの認証後のコールバックを処理し、
- * 一時的なコードをアクセストークンに交換し、
- * ユーザーメタデータとアクセストークンをクライアントに渡すトークンに保存します。
+ * ClickUpからのユーザー認証後のコールバックを処理します。
+ * 一時的なコードをアクセストークンに交換し、ユーザーメタデータと
+ * 認証トークンをクライアントに渡すトークンのpropsとして保存します。
  * 最後にクライアントのコールバックURLにリダイレクトします。
  */
 app.get("/callback", async (c) => {
 	try {
-		const deps = createServiceDependencies(c.env);
-		const clickupService = new ClickUpService(deps);
+		// 状態からoauthReqInfoを取得
+		const stateParam = c.req.query("state");
+		if (!stateParam) {
+			return createAdaptiveErrorResponse(c.req.raw, "認証状態パラメータが見つかりません。", 400, "missing_state");
+		}
 
-		const oauthReqInfo = JSON.parse(atob(c.req.query("state") as string)) as AuthRequest;
+		const oauthReqInfo = JSON.parse(atob(stateParam)) as AuthRequest;
 		if (!oauthReqInfo.clientId) {
-			throw new ApiError("無効なstateパラメータです", 400, "INVALID_STATE");
+			return createAdaptiveErrorResponse(c.req.raw, "無効な認証状態です。認証プロセスを最初からやり直してください。", 400, "invalid_state");
+		}
+
+		// ClickUpからのエラーをチェック
+		const error = c.req.query("error");
+		if (error) {
+			const errorDescription = c.req.query("error_description") || "認証が拒否されました";
+			return createAdaptiveErrorResponse(c.req.raw, `認証に失敗しました: ${errorDescription}`, 400, error);
+		}
+
+		const code = c.req.query("code");
+		if (!code) {
+			return createAdaptiveErrorResponse(c.req.raw, "認証コードが見つかりません。", 400, "missing_code");
 		}
 
 		// コードをアクセストークンに交換
 		const [accessToken, errResponse] = await fetchUpstreamAuthToken({
-			client_id: deps.config.clickupClientId,
-			client_secret: deps.config.clickupClientSecret,
-			code: c.req.query("code"),
+			client_id: c.env.CLICKUP_CLIENT_ID,
+			client_secret: c.env.CLICKUP_CLIENT_SECRET,
+			code,
 			redirect_uri: new URL("/callback", c.req.url).href,
-			upstream_url: deps.config.clickupTokenUrl,
+			upstream_url: CLICKUP_CONFIG.tokenUrl,
 		});
 
-		if (errResponse) return errResponse;
+		if (errResponse) {
+			return createAdaptiveErrorResponse(c.req.raw, "アクセストークンの取得に失敗しました。", 500, "token_exchange_failed");
+		}
 
 		// ClickUpからユーザー情報を取得
-		const userData = await clickupService.getUserInfo(accessToken);
+		const userResponse = await fetch(CLICKUP_CONFIG.userInfoUrl, {
+			headers: {
+				Authorization: `Bearer ${accessToken}`,
+				"Content-Type": "application/json",
+			},
+		});
+
+		if (!userResponse.ok) {
+			return createAdaptiveErrorResponse(c.req.raw, "ClickUpからユーザー情報を取得できませんでした。しばらく時間をおいてから再度お試しください。", 500, "user_info_fetch_failed");
+		}
+
+		const userData = await userResponse.json() as { user: { id: string; username: string; email: string } };
 		const { id, username, email } = userData.user;
 
 		// MCPクライアントに新しいトークンを返す
@@ -127,7 +189,7 @@ app.get("/callback", async (c) => {
 			metadata: {
 				label: username,
 			},
-			// MyMCPでthis.propsとして利用可能
+			// MyMCPクラス内でthis.propsとして利用可能
 			props: {
 				accessToken,
 				email,
@@ -141,44 +203,69 @@ app.get("/callback", async (c) => {
 
 		return Response.redirect(redirectTo);
 	} catch (error) {
-		return handleError(error);
-	}
-});
-
-/**
- * リアルタイム更新用のSSEエンドポイント
- */
-app.get("/sse", async (c) => {
-	try {
-		const userId = c.req.query("userId");
-		if (!userId) {
-			throw new ApiError("userIdパラメータが必要です", 400, "MISSING_USER_ID");
-		}
-
-		const deps = createServiceDependencies(c.env);
-		const sseService = new SSEService(deps);
-
-		return await sseService.createSSEConnection(userId);
-	} catch (error) {
-		return handleError(error);
+		console.error("Callback endpoint error:", error);
+		return createAdaptiveErrorResponse(
+			c.req.raw,
+			"認証処理中に予期しないエラーが発生しました。もう一度お試しください。",
+			500,
+			"internal_error"
+		);
 	}
 });
 
 /**
  * ClickUp Webhookエンドポイント
+ * 
+ * McpAgentがリアルタイム通信を自動的に処理するため、
+ * ここではイベントログとして記録のみ行います。
  */
 app.post("/webhook/clickup", async (c) => {
+	const payload = await c.req.json();
+
+	// WebhookイベントをKVに記録（ログとして）
+	const webhookKey = `webhook:${Date.now()}:${Math.random().toString(36).substring(7)}`;
+	await c.env.OAUTH_KV.put(
+		webhookKey,
+		JSON.stringify({
+			...payload,
+			timestamp: new Date().toISOString(),
+		}),
+		{ expirationTtl: 24 * 3600 } // 24時間
+	);
+
+	console.log(`ClickUp Webhook received: ${payload.event}`);
+
+	return createSuccessResponse({
+		message: "Webhookを受信しました",
+		event: payload.event
+	});
+});
+
+/**
+ * Faviconエンドポイント
+ * ClickUpのfaviconをプロキシして提供します
+ */
+app.get("/favicon.ico", async (c) => {
 	try {
-		const payload = await c.req.json();
-		const deps = createServiceDependencies(c.env);
-		const sseService = new SSEService(deps);
+		// ClickUpのfaviconを取得
+		const response = await fetch("https://clickup.com/favicon.ico");
 
-		// WebhookイベントをKV経由ですべての関連ユーザーにブロードキャスト
-		await sseService.storeWebhookEvent(payload);
+		if (!response.ok) {
+			// フォールバック: リダイレクト
+			return c.redirect("https://clickup.com/favicon.ico", 301);
+		}
 
-		return createSuccessResponse({ message: "Webhookを受信しました" });
+		const favicon = await response.arrayBuffer();
+
+		return new Response(favicon, {
+			headers: {
+				"Content-Type": "image/x-icon",
+				"Cache-Control": "public, max-age=86400", // 24時間キャッシュ
+			},
+		});
 	} catch (error) {
-		return handleError(error);
+		// エラー時はリダイレクト
+		return c.redirect("https://clickup.com/favicon.ico", 301);
 	}
 });
 
@@ -186,14 +273,35 @@ app.post("/webhook/clickup", async (c) => {
  * ヘルスチェックエンドポイント
  */
 app.get("/health", async (c) => {
-	try {
-		return createSuccessResponse({
-			status: "healthy",
-			service: "ClickUp SSE Server"
-		});
-	} catch (error) {
-		return handleError(error);
-	}
+	return createSuccessResponse({
+		status: "healthy",
+		service: SERVER_CONFIG.serverName
+	});
+});
+
+/**
+ * 404 Not Found ハンドラー
+ */
+app.notFound((c) => {
+	return createAdaptiveErrorResponse(
+		c.req.raw,
+		"お探しのページは見つかりませんでした。URLを確認してください。",
+		404,
+		"not_found"
+	);
+});
+
+/**
+ * 一般的なエラーハンドラー
+ */
+app.onError((error, c) => {
+	console.error("Unexpected error:", error);
+	return createAdaptiveErrorResponse(
+		c.req.raw,
+		"サーバーで予期しないエラーが発生しました。しばらく時間をおいてから再度お試しください。",
+		500,
+		"internal_server_error"
+	);
 });
 
 export { app as ClickUpHandler };

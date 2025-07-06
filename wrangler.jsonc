@@ -1,20 +1,16 @@
 /**
+ * Cloudflare Workers Configuration
  * For more details on how to configure Wrangler, refer to:
  * https://developers.cloudflare.com/workers/wrangler/configuration/
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "clickup-sse-oauth",
+  "name": "clickup-mcp-server",
   "main": "src/index.ts",
   "compatibility_date": "2025-03-10",
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  "vars": {
-    "CLICKUP_CLIENT_ID": "",
-    "CLICKUP_CLIENT_SECRET": "",
-    "COOKIE_ENCRYPTION_KEY": ""
-  },
   "migrations": [
     {
       "new_sqlite_classes": [

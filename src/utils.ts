@@ -1,15 +1,20 @@
 /**
- * Constructs an authorization URL for an upstream service.
+ * ClickUp MCP Server - Utility Functions
+ * 
+ * OAuth認証フローで使用される共通ユーティリティ関数を提供します。
+ */
+
+/**
+ * 上流サービスの認証URLを構築します
  *
- * @param {Object} options
- * @param {string} options.upstream_url - The base URL of the upstream service.
- * @param {string} options.client_id - The client ID of the application.
- * @param {string} options.redirect_uri - The redirect URI of the application.
- * @param {string} [options.state] - The state parameter.
- * @param {string} [options.scope] - The scope parameter.
- * @param {string} [options.response_type] - The response type parameter.
- *
- * @returns {string} The authorization URL.
+ * @param options 認証URL構築パラメータ
+ * @param options.upstream_url 上流サービスのベースURL
+ * @param options.client_id アプリケーションのクライアントID
+ * @param options.redirect_uri アプリケーションのリダイレクトURI
+ * @param options.state 状態パラメータ（オプション）
+ * @param options.scope スコープパラメータ（オプション）
+ * @param options.response_type レスポンスタイプパラメータ（オプション）
+ * @returns 認証URL
  */
 export function getUpstreamAuthorizeUrl({
 	upstream_url,
@@ -36,16 +41,15 @@ export function getUpstreamAuthorizeUrl({
 }
 
 /**
- * Fetches an authorization token from an upstream service.
+ * 上流サービスから認証トークンを取得します
  *
- * @param {Object} options
- * @param {string} options.client_id - The client ID of the application.
- * @param {string} options.client_secret - The client secret of the application.
- * @param {string} options.code - The authorization code.
- * @param {string} options.redirect_uri - The redirect URI of the application.
- * @param {string} options.upstream_url - The token endpoint URL of the upstream service.
- *
- * @returns {Promise<[string, null] | [null, Response]>} A promise that resolves to an array containing the access token or an error response.
+ * @param options トークン取得パラメータ
+ * @param options.client_id アプリケーションのクライアントID
+ * @param options.client_secret アプリケーションのクライアントシークレット
+ * @param options.code 認証コード
+ * @param options.redirect_uri アプリケーションのリダイレクトURI
+ * @param options.upstream_url 上流サービスのトークンエンドポイントURL
+ * @returns アクセストークンまたはエラーレスポンスを含むPromise
  */
 export async function fetchUpstreamAuthToken({
 	client_id,
@@ -71,12 +75,13 @@ export async function fetchUpstreamAuthToken({
 		},
 		method: "POST",
 	});
+
 	if (!resp.ok) {
 		console.log(await resp.text());
 		return [null, new Response("Failed to fetch access token", { status: 500 })];
 	}
 
-	// Handle JSON response for ClickUp
+	// ClickUpのJSONレスポンスを処理
 	const contentType = resp.headers.get("content-type");
 	let accessToken: string;
 
@@ -91,9 +96,10 @@ export async function fetchUpstreamAuthToken({
 	if (!accessToken) {
 		return [null, new Response("Missing access token", { status: 400 })];
 	}
+
 	return [accessToken, null];
 }
 
-// Context from the auth process, encrypted & stored in the auth token
-// and provided to the DurableMCP as this.props
+// 認証プロセスからのコンテキスト、暗号化されて認証トークンに保存され、
+// DurableMCPにthis.propsとして提供される
 export type { UserProps as Props } from './types';
