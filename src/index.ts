@@ -186,6 +186,31 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 			},
 		);
 
+		// ClickUp タスク検索ツール
+		this.server.tool(
+			"searchTasks",
+			"ClickUpタスクをキーワードで検索します",
+			{
+				searchTerm: z.string().describe("検索キーワード（タスク名や説明から検索）"),
+				teamId: z.string().optional().describe("特定のチームIDに限定（省略で全ワークスペース）"),
+			},
+			async ({ searchTerm, teamId }: { searchTerm: string; teamId?: string }) => {
+				try {
+					const data = await clickupTools.searchTasks(this.props.accessToken, searchTerm, teamId);
+					return {
+						content: [
+							{
+								text: JSON.stringify(data, null, 2),
+								type: "text",
+							},
+						],
+					};
+				} catch (error) {
+					throw new Error(`タスクの検索に失敗しました: ${error instanceof Error ? error.message : String(error)}`);
+				}
+			},
+		);
+
 	}
 }
 

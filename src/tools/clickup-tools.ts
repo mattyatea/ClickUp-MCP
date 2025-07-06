@@ -125,6 +125,8 @@ export class ClickUpTools {
 
                     // 自分のユーザーIDをassigneesパラメータに設定
                     url.searchParams.set('assignees[]', userId);
+                    // 取得件数を15件に設定
+                    url.searchParams.set('limit', '15');
 
                     const response = await fetch(url, {
                         headers: {
@@ -268,5 +270,80 @@ export class ClickUpTools {
 
         const task = await response.json();
         return this.formatTaskDates(task);
+    }
+
+    /**
+     * タスクを検索
+     * @param accessToken ClickUp APIアクセストークン
+     * @param searchTerm 検索キーワード
+     * @param teamId チームID（省略で全ワークスペース）
+     * @returns 検索結果のタスク一覧
+     */
+    async searchTasks(accessToken: string, searchTerm: string, teamId?: string) {
+        try {
+            let teams;
+            if (teamId) {
+                // 特定のチームのみ
+                const workspacesData = await this.getWorkspaces(accessToken);
+                const team = workspacesData.teams.find(t => t.id === teamId);
+                teams = team ? [team] : [{ id: teamId, name: `Team ${teamId}` }];
+            } else {
+                // 全ワークスペースを取得
+                const workspacesData = await this.getWorkspaces(accessToken);
+                teams = workspacesData.teams || [];
+            }
+
+            const searchResults: any[] = [];
+
+            for (const team of teams) {
+                try {
+                    const url = new URL(`${this.deps.config.clickupApiBaseUrl}/team/${team.id}/task`);
+
+                    // 検索キーワードを設定
+                    url.searchParams.set('search', searchTerm);
+                    // 取得件数を15件に設定
+                    url.searchParams.set('limit', '15');
+                    // 完了済みタスクも含める
+                    url.searchParams.set('include_closed', 'true');
+
+                    const response = await fetch(url, {
+                        headers: {
+                            Authorization: `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json',
+                        },
+                    });
+
+                    if (!response.ok) {
+                        console.warn(`チーム ${team.id} のタスク検索でエラー: ${response.status}`);
+                        continue;
+                    }
+
+                    const data = await response.json() as { tasks?: any[] };
+                    if (data.tasks && Array.isArray(data.tasks)) {
+                        // チーム情報を各タスクに追加し、日付を変換
+                        const tasksWithTeamInfo = data.tasks.map((task: any) => {
+                            const formattedTask = this.formatTaskDates(task);
+                            return {
+                                ...formattedTask,
+                                teamId: team.id,
+                                teamName: team.name || 'Unknown Team'
+                            };
+                        });
+                        searchResults.push(...tasksWithTeamInfo);
+                    }
+                } catch (error) {
+                    console.warn(`チーム ${team.id} の検索でエラー:`, error);
+                }
+            }
+
+            return {
+                success: true,
+                searchTerm,
+                tasks: searchResults,
+                totalTasks: searchResults.length
+            };
+        } catch (error) {
+            throw new Error(`タスクの検索に失敗しました: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 } 
