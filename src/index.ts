@@ -168,10 +168,12 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 			"自分がアサインされているClickUpタスクを取得します",
 			{
 				teamId: z.string().optional().describe("特定のチームIDに限定（省略で全ワークスペース）"),
+				limit: z.number().optional().default(15).describe("取得件数（デフォルト: 15、最大: 100）"),
+				page: z.number().optional().default(0).describe("ページ番号（0から開始）"),
 			},
-			async ({ teamId }: { teamId?: string }) => {
+			async ({ teamId, limit = 15, page = 0 }: { teamId?: string; limit?: number; page?: number }) => {
 				try {
-					const data = await clickupTools.getMyTasks(this.props.accessToken, teamId);
+					const data = await clickupTools.getMyTasks(this.props.accessToken, teamId, limit, page);
 					return {
 						content: [
 							{
@@ -193,10 +195,12 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
 			{
 				searchTerm: z.string().describe("検索キーワード（タスク名や説明から検索）"),
 				teamId: z.string().optional().describe("特定のチームIDに限定（省略で全ワークスペース）"),
+				limit: z.number().optional().default(15).describe("取得件数（デフォルト: 15、最大: 100）"),
+				page: z.number().optional().default(0).describe("ページ番号（0から開始）"),
 			},
-			async ({ searchTerm, teamId }: { searchTerm: string; teamId?: string }) => {
+			async ({ searchTerm, teamId, limit = 15, page = 0 }: { searchTerm: string; teamId?: string; limit?: number; page?: number }) => {
 				try {
-					const data = await clickupTools.searchTasks(this.props.accessToken, searchTerm, teamId);
+					const data = await clickupTools.searchTasks(this.props.accessToken, searchTerm, teamId, limit, page);
 					return {
 						content: [
 							{
