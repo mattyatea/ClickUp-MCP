@@ -1,0 +1,328 @@
+---
+description: ClickUp MCP Server のアーキテクチャパターン・設計原則
+globs: ["src/**/*.ts"]
+alwaysApply: true
+---
+
+# アーキテクチャパターン
+
+## 🎯 プロジェクト概要
+
+**プロジェクト名**: ClickUp MCP Server  
+**タイプ**: Cloudflare Workers ベースの OAuth MCP Server  
+**目的**: OAuth認証を通じてClickUp APIと連携するMCP（Model Context Protocol）ツールを提供
+
+## 🏗️ 技術スタック
+
+- **ランタイム**: Cloudflare Workers (Edge Runtime)
+- **言語**: TypeScript (ES2021、strict mode)
+- **フレームワーク**: HTTP処理にHono
+- **OAuth**: @cloudflare/workers-oauth-provider
+- **MCP**: @modelcontextprotocol/sdk + agents/mcp
+- **APIクライアント**: 内蔵のClickUp APIクライアント
+- **バリデーション**: Zodスキーマ
+- **パッケージマネージャー**: pnpm
+
+## 📂 ディレクトリ構造
+
+```
+src/
+├── index.ts                    # メインアプリケーションエントリーポイント
+├── config.ts                   # 設定定数
+├── types.ts                    # TypeScript型定義
+├── utils.ts                    # ユーティリティ関数
+├── workers-oauth-utils.ts      # OAuth専用ユーティリティ
+├── auth/                       # 認証モジュール
+│   └── user.ts                 # ユーザー認証ロジック
+├── handlers/                   # リクエストハンドラー
+│   ├── combined-handler.ts     # メインルーティングロジック
+│   ├── oauth-handler.ts        # OAuthフローハンドラー
+│   └── site-handler.ts         # サイトとドキュメンテーションハンドラー
+├── tools/                      # MCPツールとユーティリティ
+│   ├── auth.ts                 # 認証関連ツール
+│   ├── task.ts                 # タスク操作ツール
+│   ├── search.ts               # 検索機能ツール
+│   ├── inbox.ts                # 受信箱管理ツール
+│   ├── index.ts                # ツールオーケストレーション
+│   └── common/                 # 共通ユーティリティ
+│       └── error-handler.ts    # エラーハンドリングユーティリティ
+├── api/                        # APIクライアント実装
+│   ├── index.ts                # 統合クライアント
+│   ├── basic.ts                # 基本タスク操作
+│   ├── search.ts               # 検索機能
+│   └── common/                 # 共通機能
+│       └── error-handler.ts    # エラーハンドリング
+└── utils/                      # ユーティリティ関数
+    └── formatters.ts           # データフォーマッティングユーティリティ
+```
+
+## 🔄 現在の実装構造
+
+### 1. MCPサーバー実装
+```typescript
+export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
+  server = new McpServer({
+    name: "ClickUp MCP Server",
+    version: "1.0.0",
+    icon: "https://clickup.com/icon.ico",
+  });
+
+  async init() {
+    // 依存性注入の設定
+    const deps: ServiceDependencies = {
+      env: this.env,
+      config: createAppConfig(this.env),
+    };
+    
+    const clickupClient = new ClickUpClient(deps);
+    const getAccessToken = () => this.props.accessToken;
+    
+    // 機能別ツール登録
+    registerAuthTools(this.server, clickupClient, getAccessToken);
+    registerTaskTools(this.server, clickupClient, getAccessToken);
+    registerSearchTools(this.server, clickupClient, getAccessToken);
+    registerInboxTools(this.server, clickupClient, getAccessToken);
+  }
+}
+```
+
+### 2. 依存性注入パターン
+```typescript
+export interface ServiceDependencies {
+  env: Env;
+  config: AppConfig;
+}
+
+export class ClickUpClient {
+  private auth: ClickUpAuth;
+  private taskBasic: ClickUpTaskBasic;
+  private taskSearch: ClickUpTaskSearch;
+  private formatters: DataFormatters;
+
+  constructor(private deps: ServiceDependencies) {
+    this.auth = new ClickUpAuth(deps);
+    this.taskBasic = new ClickUpTaskBasic(deps);
+    this.taskSearch = new ClickUpTaskSearch(deps);
+    this.formatters = new DataFormatters(deps);
+  }
+
+  // 公開メソッド
+  async getUserInfo(accessToken: string) {
+    return this.auth.getUserInfo(accessToken);
+  }
+
+  async getTask(accessToken: string, taskId: string) {
+    const rawData = await this.taskBasic.getTask(accessToken, taskId);
+    return this.formatters.formatTaskData(rawData);
+  }
+}
+```
+
+### 3. 機能別モジュール分割
+- `src/api/` - API クライアント実装
+- `src/tools/` - MCP ツール登録関数
+- `src/handlers/` - HTTP リクエストハンドラー
+- `src/auth/` - 認証関連ロジック
+
+## 🛠️ MCP Tool 登録パターン
+```typescript
+// 関数形式でツール登録
+export function registerAuthTools(server: McpServer, clickupClient: ClickUpClient, getAccessToken: () => string) {
+  server.tool(
+    "getUserInfo",
+    "ClickUpから認証されたユーザー情報を取得します。ユーザーID・ユーザー名・メールアドレス・プロフィール画像URL・所属ワークスペース情報を含む詳細情報をJSON形式で表示。認証確認・ユーザー情報確認・アカウント設定時に使用",
+    {},
+    responseSchema,
+    async () => {
+      try {
+        const data = await clickupClient.getUserInfo(getAccessToken());
+        return {
+          content: [
+            {
+              text: JSON.stringify(data, null, 2),
+              type: "text",
+            },
+          ],
+        };
+      } catch (error) {
+        throw new Error(`ユーザー情報の取得に失敗しました: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  );
+}
+```
+
+## 🔐 OAuth認証フロー
+```typescript
+// MyMCPクラス内でthis.propsとして利用可能
+props: {
+  accessToken,
+  email,
+  id,
+  username,
+} as UserProps
+
+// 認証スコープ
+// デフォルトスコープでワークスペース、スペース、フォルダ、リスト、タスクへの読み書きアクセス
+// 時間追跡エントリの作成と管理用の時間追跡権限を含む
+```
+
+## 🛡️ エラーハンドリングパターン
+```typescript
+// 適応的エラーレスポンス
+function createAdaptiveErrorResponse(request: Request, error: string, statusCode: number) {
+  if (isBrowserRequest(request)) {
+    return createErrorPageResponse(error, statusCode);
+  } else {
+    return createErrorResponse(error, statusCode);
+  }
+}
+
+// API呼び出しパターン
+const response = await fetch(url, {
+  method: 'GET',
+  headers: {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json'
+  }
+});
+
+if (!response.ok) {
+  throw new Error(`API呼び出し失敗: ${response.status}`);
+}
+```
+
+## 🎯 統合クライアント
+`ClickUpClient` が全機能を統合
+- **認証関連**: `getUserInfo()`, `getWorkspaces()`
+- **タスク基本操作**: `getTask()`, `updateTask()`, `assignTask()`
+- **検索機能**: `getMyTasks()`, `searchTasks()`
+- **受信箱機能**: `getInboxFutureTasks()`, `getInboxDoneTasks()`
+
+## 🔧 メインエントリーポイント
+
+- `src/index.ts` - メインアプリケーションエントリーポイント、OAuthプロバイダーとMCPエージェントをエクスポート
+- `src/handlers/combined-handler.ts` - 全てのハンドラーを統合するメインルーティングロジック
+- `src/handlers/oauth-handler.ts` - OAuthフローハンドラー（`/authorize`、`/callback`、`/webhook/clickup`エンドポイント）
+- `src/handlers/site-handler.ts` - サイトとドキュメンテーションハンドラー（`/`エンドポイント）
+- `src/tools/index.ts` - 全てのAPI操作を含むClickUp APIクライアントツール
+- `src/api/common/error-handler.ts` - APIレスポンス用のエラーハンドリングユーティリティ
+
+## 🌊 コアアーキテクチャフロー
+
+1. **OAuth認証**: ユーザーはClickUp OAuth経由で認証、トークンはKVに保存
+2. **MCPエージェント**: 認証済みセッションはClickUp APIアクセス権限を持つMCPエージェントを作成
+3. **ツール登録**: ClickUp操作用の組み込みツールを`init()`メソッドで登録
+4. **MCPエンドポイント**: `/sse`はMCP通信用の永続的な接続を提供
+5. **Durable Objects**: Cloudflare Durable Objects経由でステートフルセッションを管理
+
+## 📋 MCPツールカテゴリ
+
+- **ユーザー & チーム**: `getUserInfo`、`getWorkspaces`
+- **タスク管理**: `getTask`、`updateTask`、`assignTask`
+- **タスク発見**: `getMyTasks`、`searchTasks`  
+- **受信箱機能**: `getInboxFutureTasks`、`getInboxDoneTasks`、`getInboxUnscheduledTasks`、`getInboxAll`
+- **ユーティリティ**: `add`（テスト用の基本的な数学演算）
+
+## ⚙️ 環境設定
+
+### 必要なシークレット（wrangler.jsonc）
+- `CLICKUP_CLIENT_ID` - ClickUp OAuthアプリケーションクライアントID
+- `CLICKUP_CLIENT_SECRET` - ClickUp OAuthアプリケーションクライアントシークレット
+- `COOKIE_ENCRYPTION_KEY` - Cookie用の32文字の暗号化キー
+
+### 環境変数
+- `DEV_PORT` - 開発サーバーポート（デフォルト: 8788）
+
+### KVネームスペース
+- `OAUTH_KV` - OAuthトークンとセッションデータを保存
+
+### Durable Objects
+- `MyMCP` - ステートフルなMCPセッションを処理
+
+## 🚀 汎用的なMCPサーバー開発パターン
+
+### 基本構造テンプレート
+```typescript
+// 基本的なMCPサーバークラス
+export class MyMCP extends McpAgent<Env, Record<string, never>, UserProps> {
+    server = new McpServer({
+        name: "Your API MCP Server",
+        version: "1.0.0",
+        icon: "https://example.com/icon.ico",
+    });
+
+    async init() {
+        // 依存性注入の設定
+        const deps: ServiceDependencies = {
+            env: this.env,
+            config: createAppConfig(this.env),
+        };
+        
+        // APIクライアントの初期化
+        const apiClient = new YourApiClient(deps);
+        const getAccessToken = () => this.props.accessToken;
+
+        // 機能別ツール登録
+        registerAuthTools(this.server, apiClient, getAccessToken);
+        registerCoreTools(this.server, apiClient, getAccessToken);
+        registerSearchTools(this.server, apiClient, getAccessToken);
+    }
+}
+```
+
+### 依存性注入パターン
+```typescript
+// 依存性の型定義
+export interface ServiceDependencies {
+    env: Env;
+    config: AppConfig;
+}
+
+// 統合APIクライアント
+export class YourApiClient {
+    private auth: AuthService;
+    private core: CoreService;
+    private search: SearchService;
+    private formatters: DataFormatters;
+
+    constructor(private deps: ServiceDependencies) {
+        this.auth = new AuthService(deps);
+        this.core = new CoreService(deps);
+        this.search = new SearchService(deps);
+        this.formatters = new DataFormatters(deps);
+    }
+
+    // 公開メソッド
+    async getUser(accessToken: string) {
+        return this.auth.getUser(accessToken);
+    }
+
+    async getData(accessToken: string, id: string) {
+        const rawData = await this.core.getData(accessToken, id);
+        return this.formatters.formatData(rawData);
+    }
+}
+```
+
+## ✅ アーキテクチャチェックリスト
+
+### 設計原則
+- [ ] 単一責任の原則に従っている
+- [ ] 依存性注入パターンを使用している
+- [ ] 機能別にモジュールが分割されている
+- [ ] 統合クライアントで機能が集約されている
+
+### MCP実装
+- [ ] McpAgentを適切に拡張している
+- [ ] ツール登録が機能別に分離されている
+- [ ] 適切なエラーハンドリング
+- [ ] 型安全性が確保されている
+
+### インフラストラクチャ
+- [ ] OAuth認証フローが適切に実装されている
+- [ ] Durable Objectsでステート管理されている
+- [ ] KVストレージが適切に使用されている
+- [ ] 環境設定が分離されている
+
+このアーキテクチャにより、スケーラブルで保守可能なMCPサーバーを構築し、効率的なClickUp API統合を実現しています。

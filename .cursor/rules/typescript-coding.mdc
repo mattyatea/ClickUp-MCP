@@ -1,0 +1,353 @@
+---
+description: TypeScript コーディング規約・型安全性・ベストプラクティス
+globs: ["**/*.ts", "**/*.tsx"]
+alwaysApply: true
+---
+
+# TypeScript コーディング規約
+
+## 🎯 基本方針
+
+### 必須ルール
+- **厳密モード**: `strict: true` を使用
+- **型安全性**: 型定義を明示的に記述
+- **`any`型禁止**: 具体的な型を定義
+- **非同期処理**: `async/await` を使用、`.then()` チェーン禁止
+
+### 推奨ルール
+- **不変性**: `const` を優先、`let` は最小限
+- **純粋関数**: 副作用を最小化
+- **型推論**: 明らかな場合は型省略可能
+
+## 📝 型定義
+
+### ✅ 良い例
+```typescript
+// 関数の型定義
+function processTask(task: Task): Promise<ProcessedTask> {
+  return processTaskAsync(task);
+}
+
+// インターフェース定義
+interface UserProps {
+  id: string;
+  username: string;
+  email: string;
+  accessToken: string;
+}
+
+// ジェネリクス
+function createResponse<T>(data: T): ApiResponse<T> {
+  return { success: true, data };
+}
+```
+
+### ❌ 悪い例
+```typescript
+// any型の使用
+function processTask(task: any): any {
+  return processTaskAsync(task);
+}
+
+// 型定義不足
+function getData(id) {
+  return fetch(`/api/${id}`);
+}
+
+// 複雑な型の省略
+const result = someComplexOperation();
+```
+
+## 🔧 関数定義
+
+### 基本ルール
+- **戻り値の型**: 明示的に定義
+- **パラメータの型**: 全て明示的に定義
+- **オプション引数**: 最後に配置
+
+### 例
+```typescript
+// 基本的な関数
+async function getTask(
+  taskId: string, 
+  includeSubtasks?: boolean
+): Promise<Task> {
+  // 実装
+}
+
+// 高階関数
+function createApiClient<T>(
+  baseUrl: string,
+  transformer: (data: unknown) => T
+): ApiClient<T> {
+  // 実装
+}
+
+// アロー関数
+const formatData = (data: RawData): FormattedData => {
+  return {
+    id: data.id,
+    name: data.name,
+    createdAt: new Date(data.created_at)
+  };
+};
+```
+
+## 📦 インポート・エクスポート
+
+### インポート規約
+```typescript
+// 型インポート
+import type { ServiceDependencies, UserProps } from "#/types";
+
+// 通常のインポート
+import { ClickUpAuth } from "#/auth/user";
+import { createResponse } from "#/utils/response";
+
+// パスマッピング使用
+import { API_CONFIG } from "#/config";
+```
+
+### エクスポート規約
+```typescript
+// 名前付きエクスポート（推奨）
+export function createApiClient(): ApiClient { }
+export class UserService { }
+export interface ApiResponse<T> { }
+
+// デフォルトエクスポート（必要な場合のみ）
+export default class MainService { }
+```
+
+## 🛡️ エラーハンドリング
+
+### 統一パターン
+```typescript
+// API呼び出しパターン
+async function fetchUserData(id: string): Promise<User> {
+  try {
+    const response = await fetch(`/api/users/${id}`);
+    
+    if (!response.ok) {
+      throw new Error(`ユーザー取得失敗: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('ユーザー情報取得エラー:', error);
+    throw error instanceof Error 
+      ? error 
+      : new Error('予期しないエラーが発生しました');
+  }
+}
+
+// カスタムエラークラス
+class ApiError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number,
+    public code?: string
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+```
+
+## 🏗️ クラス設計
+
+### 基本構造
+```typescript
+// 依存性注入パターン
+export class UserService {
+  private readonly apiClient: ApiClient;
+  
+  constructor(
+    private readonly deps: ServiceDependencies
+  ) {
+    this.apiClient = new ApiClient(deps.config);
+  }
+  
+  async getUser(id: string): Promise<User> {
+    // 実装
+  }
+  
+  private validateUserId(id: string): void {
+    if (!id || typeof id !== 'string') {
+      throw new Error('有効なユーザーIDが必要です');
+    }
+  }
+}
+```
+
+### アクセス修飾子
+- **public**: 外部からアクセス可能（デフォルト）
+- **private**: クラス内のみアクセス可能
+- **protected**: 継承クラスからアクセス可能
+- **readonly**: 読み取り専用
+
+## 🔄 非同期処理
+
+### ✅ 推奨パターン
+```typescript
+// async/await 使用
+async function fetchMultipleData(): Promise<CombinedData> {
+  try {
+    const [users, tasks, projects] = await Promise.all([
+      fetchUsers(),
+      fetchTasks(),
+      fetchProjects()
+    ]);
+    
+    return combineData(users, tasks, projects);
+  } catch (error) {
+    throw new Error(`データ取得失敗: ${error}`);
+  }
+}
+
+// エラーハンドリング付き
+async function safeApiCall<T>(
+  apiCall: () => Promise<T>,
+  fallback: T
+): Promise<T> {
+  try {
+    return await apiCall();
+  } catch (error) {
+    console.warn('API呼び出し失敗、フォールバック値を使用:', error);
+    return fallback;
+  }
+}
+```
+
+### ❌ 避けるパターン
+```typescript
+// Promiseチェーン
+function fetchData() {
+  return fetch('/api/data')
+    .then(response => response.json())
+    .then(data => processData(data))
+    .catch(error => handleError(error));
+}
+
+// 未処理のPromise
+function dangerousCall() {
+  fetch('/api/data'); // awaitなし
+}
+```
+
+## 🎨 命名規約
+
+### 変数・関数
+```typescript
+// camelCase
+const userName = 'john_doe';
+const isAuthenticated = true;
+
+// 関数は動詞から始める
+function createUser(): User { }
+function validateInput(): boolean { }
+function getUserById(): User { }
+```
+
+### 型・インターフェース・クラス
+```typescript
+// PascalCase
+interface UserData { }
+class ApiClient { }
+type ResponseType = 'success' | 'error';
+
+// 接頭辞の使用
+interface IUserService { }  // インターフェース（任意）
+type TApiResponse<T> = { }   // 型エイリアス（任意）
+```
+
+### 定数
+```typescript
+// UPPER_SNAKE_CASE
+const API_BASE_URL = 'https://api.example.com';
+const MAX_RETRY_COUNT = 3;
+
+// オブジェクト定数
+const CONFIG = {
+  timeout: 5000,
+  retryCount: 3
+} as const;
+```
+
+## 📊 型ガード・アサーション
+
+### 型ガード
+```typescript
+// 型ガード関数
+function isUser(obj: unknown): obj is User {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    'id' in obj &&
+    'name' in obj
+  );
+}
+
+// 使用例
+function processUserData(data: unknown): User {
+  if (isUser(data)) {
+    return data; // User型として扱える
+  }
+  throw new Error('無効なユーザーデータです');
+}
+```
+
+### 型アサーション
+```typescript
+// 型アサーション（最小限の使用）
+const userElement = document.getElementById('user') as HTMLElement;
+
+// より安全な方法
+const userElement = document.getElementById('user');
+if (userElement instanceof HTMLElement) {
+  // 安全に使用
+}
+```
+
+## 🚀 パフォーマンス考慮
+
+### 効率的なコード
+```typescript
+// 分割代入
+const { id, name, email } = user;
+
+// スプレッド演算子
+const updatedUser = { ...user, isActive: true };
+
+// 配列メソッド
+const activeUsers = users.filter(user => user.isActive);
+const userNames = users.map(user => user.name);
+
+// 並列処理
+const results = await Promise.all([
+  fetchUsers(),
+  fetchTasks()
+]);
+```
+
+## 📋 チェックリスト
+
+### コード品質
+- [ ] 全ての関数に型定義がある
+- [ ] `any`型を使用していない
+- [ ] エラーハンドリングが適切
+- [ ] 非同期処理でasync/awaitを使用
+- [ ] 命名規約に従っている
+- [ ] 型ガードを適切に使用
+
+### パフォーマンス
+- [ ] 不要なre-renderを避けている
+- [ ] 大きなオブジェクトの不要なコピーを避けている
+- [ ] 並列処理を活用している
+- [ ] メモリリークを防いでいる
+
+### 保守性
+- [ ] 関数が単一責任を持っている
+- [ ] 適切にコメントが書かれている
+- [ ] 型定義が再利用可能
+- [ ] 依存関係が明確

@@ -102,4 +102,4 @@ export async function fetchUpstreamAuthToken({
 
 // 認証プロセスからのコンテキスト、暗号化されて認証トークンに保存され、
 // DurableMCPにthis.propsとして提供される
-export type { UserProps as Props } from './types';
+export type { UserProps as Props } from "#/types";

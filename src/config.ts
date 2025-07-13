@@ -4,7 +4,7 @@
  * アプリケーションの設定とClickUp API関連の定数を定義します。
  */
 
-import type { AppConfig } from './types';
+import type { AppConfig } from "#/types";
 
 export function createAppConfig(env: Env): AppConfig {
     return {

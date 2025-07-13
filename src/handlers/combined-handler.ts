@@ -5,8 +5,8 @@
  */
 
 import { Hono } from "hono";
-import { OAuthHandler } from "./oauth-handler";
-import { SiteHandler } from "./site-handler";
+import { OAuthHandler } from "#/handlers/oauth-handler";
+import { SiteHandler } from "#/handlers/site-handler";
 
 const app = new Hono<{ Bindings: Env }>();
 

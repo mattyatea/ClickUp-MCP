@@ -1,0 +1,445 @@
+---
+description: ClickUp API 統合のベストプラクティス
+globs: ["src/api/**/*.ts", "src/auth/**/*.ts"]
+alwaysApply: true
+---
+
+# ClickUp API 統合ガイド
+
+## 🏗️ 現在の実装パターン
+
+### 1. 統合クライアント (`src/api/index.ts`)
+```typescript
+export class ClickUpClient {
+  constructor(private deps: ServiceDependencies) {
+    this.auth = new ClickUpAuth(deps);
+    this.taskBasic = new ClickUpTaskBasic(deps);
+    this.taskSearch = new ClickUpTaskSearch(deps);
+    this.formatters = new DataFormatters(deps);
+  }
+
+  // 公開メソッド
+  async getUserInfo(accessToken: string) {
+    return this.auth.getUserInfo(accessToken);
+  }
+
+  async getTask(accessToken: string, taskId: string) {
+    const rawData = await this.taskBasic.getTask(accessToken, taskId);
+    return this.formatters.formatTaskData(rawData);
+  }
+}
+```
+
+### 2. 機能別APIクライアント
+- `ClickUpAuth` - 認証・ユーザー情報
+- `ClickUpTaskBasic` - タスク基本操作
+- `ClickUpTaskSearch` - タスク検索
+- `DataFormatters` - データフォーマッティング
+
+### 3. 共通エラーハンドリング
+```typescript
+// src/api/common/error-handler.ts
+export function createSuccessResponse(data: any): Response {
+  return new Response(JSON.stringify(data), {
+    status: 200,
+    headers: { "Content-Type": "application/json" }
+  });
+}
+
+export function createErrorResponse(error: string, statusCode: number = 500): Response {
+  return new Response(JSON.stringify({ error }), {
+    status: statusCode,
+    headers: { "Content-Type": "application/json" }
+  });
+}
+```
+
+## 🌐 主要APIエンドポイント
+
+### ユーザー情報
+```typescript
+// GET /user
+const userInfo = await fetch('https://api.clickup.com/api/v2/user', {
+  headers: { 'Authorization': `Bearer ${accessToken}` }
+});
+```
+
+### ワークスペース
+```typescript
+// GET /team
+const workspaces = await fetch('https://api.clickup.com/api/v2/team', {
+  headers: { 'Authorization': `Bearer ${accessToken}` }
+});
+```
+
+### タスク操作
+```typescript
+// GET /task/{task_id}
+const task = await fetch(`https://api.clickup.com/api/v2/task/${taskId}`, {
+  headers: { 'Authorization': `Bearer ${accessToken}` }
+});
+
+// PUT /task/{task_id}
+const updatedTask = await fetch(`https://api.clickup.com/api/v2/task/${taskId}`, {
+  method: 'PUT',
+  headers: {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify(updates)
+});
+```
+
+### タスク検索
+```typescript
+// GET /team/{team_id}/task
+const tasks = await fetch(`https://api.clickup.com/api/v2/team/${teamId}/task`, {
+  headers: { 'Authorization': `Bearer ${accessToken}` }
+});
+```
+
+## 🔍 詳細検索実装
+
+### フィルター作成
+```typescript
+export interface AdvancedSearchFilters {
+  // 基本検索
+  searchTerm: string;
+  teamId: string;
+  
+  // ステータスフィルター
+  statuses: string[];
+  
+  // 優先度フィルター  
+  priorities: ('urgent' | 'high' | 'normal' | 'low')[];
+  
+  // 担当者フィルター
+  assignees: string[];
+  
+  // 日付範囲フィルター
+  dueDateFrom?: string;
+  dueDateTo?: string;
+  
+  // その他
+  tags: string[];
+  customFields: Record<string, any>;
+  subtasks: boolean;
+  archived: boolean;
+  
+  // ページネーション
+  page: number;
+  limit: number;
+}
+```
+
+### 優先度マッピング
+```typescript
+export const PRIORITIES = {
+  urgent: 1,
+  high: 2,
+  normal: 3,
+  low: 4
+} as const;
+
+function createPriorityFilter(priorities: ('urgent' | 'high' | 'normal' | 'low')[]): number[] {
+  return priorities.map(p => PRIORITIES[p]);
+}
+```
+
+## 📊 レート制限対応
+- 1分間に100リクエストまで
+- 429エラーのハンドリング
+- 適切なリトライ機構
+
+```typescript
+async function apiCallWithRetry<T>(
+  apiCall: () => Promise<T>,
+  maxRetries: number = 3
+): Promise<T> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await apiCall();
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('429') && attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 1000; // 指数バックオフ
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error('最大リトライ回数に達しました');
+}
+```
+
+## 🛡️ エラーハンドリング
+```typescript
+async function safeApiCall<T>(
+  url: string,
+  options: RequestInit,
+  accessToken: string
+): Promise<T> {
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        ...options.headers
+      }
+    });
+    
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('認証が必要です');
+      } else if (response.status === 429) {
+        throw new Error('リクエストが多すぎます。しばらく待ってから再試行してください');
+      } else if (response.status === 404) {
+        throw new Error('リソースが見つかりません');
+      }
+      throw new Error(`API呼び出し失敗: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    throw new Error(`ClickUp API エラー: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+```
+
+## 🎨 データフォーマッター
+
+### 汎用的なデータフォーマッター
+```typescript
+export class DataFormatters {
+  constructor(private deps: ServiceDependencies) {}
+
+  /**
+   * タイムスタンプを人間が読める形式に変換
+   */
+  formatTimestamp(timestamp: string | number | null): string | null {
+    if (!timestamp) return null;
+    
+    const date = new Date(typeof timestamp === 'string' ? parseInt(timestamp) : timestamp);
+    if (isNaN(date.getTime())) return null;
+    
+    return date.toLocaleString('ja-JP', {
+      timeZone: 'Asia/Tokyo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  /**
+   * タスクデータを標準形式に変換
+   */
+  formatTaskData(task: any): any {
+    return {
+      // 基本情報
+      id: task.id,
+      name: task.name,
+      description: task.description || null,
+      status: task.status?.status || '不明',
+      
+      // 日付情報（人間が読める形式）
+      created_at: this.formatTimestamp(task.date_created),
+      updated_at: this.formatTimestamp(task.date_updated),
+      due_date: this.formatTimestamp(task.due_date),
+      start_date: this.formatTimestamp(task.start_date),
+      
+      // 担当者情報
+      assignees: task.assignees?.map((assignee: any) => ({
+        id: assignee.id,
+        username: assignee.username,
+        email: assignee.email
+      })) || [],
+      
+      // タグ
+      tags: task.tags?.map((tag: any) => tag.name) || [],
+      
+      // URL
+      url: task.url || null,
+      
+      // 優先度
+      priority: task.priority?.priority || null,
+      
+      // 所属情報
+      space: task.space ? {
+        id: task.space.id,
+        name: task.space.name
+      } : null,
+      
+      folder: task.folder ? {
+        id: task.folder.id,
+        name: task.folder.name
+      } : null,
+      
+      list: task.list ? {
+        id: task.list.id,
+        name: task.list.name
+      } : null
+    };
+  }
+
+  /**
+   * 大量データの並列処理
+   */
+  async fetchTasksByIds(
+    accessToken: string,
+    taskIds: string[],
+    page: number = 0,
+    limit: number = 15
+  ) {
+    const paginatedIds = taskIds.slice(page * limit, (page + 1) * limit);
+    
+    const taskPromises = paginatedIds.map(async (taskId: string) => {
+      try {
+        const response = await fetch(`https://api.clickup.com/api/v2/task/${taskId}`, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        
+        if (response.ok) {
+          const task = await response.json();
+          return this.formatTaskData(task);
+        }
+        return null;
+      } catch (error) {
+        console.warn(`タスクID ${taskId} の取得に失敗:`, error);
+        return null;
+      }
+    });
+    
+    const results = (await Promise.all(taskPromises)).filter(task => task !== null);
+    return { tasks: results, total: taskIds.length };
+  }
+}
+```
+
+## 🔧 設定定数
+```typescript
+// src/config.ts
+export const CLICKUP_CONFIG = {
+  authorizeUrl: 'https://app.clickup.com/api',
+  tokenUrl: 'https://api.clickup.com/api/v2/oauth/token',
+  userInfoUrl: 'https://api.clickup.com/api/v2/user',
+  apiBaseUrl: 'https://api.clickup.com/api/v2',
+  rateLimitPerMinute: 100,
+  timeoutMs: 30000
+} as const;
+```
+
+## 🔐 OAuth認証フロー
+
+### スコープ設定
+- デフォルトスコープでワークスペース、スペース、フォルダ、リスト、タスクへの読み書きアクセス
+- 時間追跡エントリの作成と管理用の時間追跡権限を含む
+
+### 認証エンドポイント
+```typescript
+// 認証開始
+app.get("/authorize", async (c) => {
+  const { redirectTo } = await c.env.OAUTH_PROVIDER.initializeAuthorization({
+    metadata: { label: "ClickUp Integration" },
+    request: c.req.raw,
+    redirectTo: getUpstreamAuthorizeUrl({
+      upstream_url: "https://app.clickup.com/api",
+      client_id: c.env.CLICKUP_CLIENT_ID,
+      redirect_uri: `${getRequestOrigin(c.req.raw)}/callback`,
+      scope: "read write"
+    }),
+    scope: "read write"
+  });
+  
+  return Response.redirect(redirectTo);
+});
+
+// 認証コールバック
+app.get("/callback", async (c) => {
+  const { code } = await c.env.OAUTH_PROVIDER.validateAuthorizationRequest(c.req.raw);
+  
+  const tokenResponse = await fetchUpstreamAuthToken({
+    upstream_url: "https://api.clickup.com/api/v2/oauth/token",
+    client_id: c.env.CLICKUP_CLIENT_ID,
+    client_secret: c.env.CLICKUP_CLIENT_SECRET,
+    code,
+    redirect_uri: `${getRequestOrigin(c.req.raw)}/callback`,
+  });
+  
+  // ユーザー情報取得とセッション完了
+  // ...
+});
+```
+
+## 📋 カスタムフィールド対応
+```typescript
+// GET /list/{list_id}/field
+const customFields = await fetch(`https://api.clickup.com/api/v2/list/${listId}/field`, {
+  headers: { 'Authorization': `Bearer ${accessToken}` }
+});
+```
+
+## 🌐 Webhook設定
+```typescript
+// POST /team/{team_id}/webhook
+const webhook = await fetch(`https://api.clickup.com/api/v2/team/${teamId}/webhook`, {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    endpoint: 'https://your-domain.workers.dev/webhook/clickup',
+    events: ['taskCreated', 'taskUpdated', 'taskDeleted']
+  })
+});
+```
+
+## 🚀 パフォーマンス最適化
+
+### 並列処理の活用
+```typescript
+// 複数のAPIコールを並列実行
+const [userData, workspaces, myTasks] = await Promise.all([
+  clickupClient.getUserInfo(accessToken),
+  clickupClient.getWorkspaces(accessToken),
+  clickupClient.getMyTasks(accessToken)
+]);
+```
+
+### レスポンスサイズの最適化
+```typescript
+// 必要最小限の情報のみを返す
+function createOptimizedTaskResponse(tasks: any[]) {
+  return tasks.map(task => ({
+    id: task.id,
+    name: task.name,
+    status: task.status,
+    assignees: task.assignees.map((a: any) => a.username),
+    // 不要な大きなデータは除外
+    // custom_fields: task.custom_fields  // コメントアウト
+  }));
+}
+```
+
+## ✅ API統合チェックリスト
+
+### セキュリティ
+- [ ] アクセストークンが適切に管理されている
+- [ ] 機密情報がログに含まれていない
+- [ ] 適切なエラーハンドリング
+- [ ] レート制限への対応
+
+### パフォーマンス
+- [ ] 並列処理を活用している
+- [ ] レスポンスサイズが最適化されている
+- [ ] 適切なページネーション
+- [ ] キャッシュ戦略の検討
+
+### 品質
+- [ ] エラーハンドリングが統一されている
+- [ ] 型定義が厳密である
+- [ ] 適切なログ出力
+- [ ] データフォーマットが一貫している

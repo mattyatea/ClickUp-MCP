@@ -7,15 +7,15 @@
 
 import type { AuthRequest, OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { Hono } from "hono";
-import { fetchUpstreamAuthToken, getUpstreamAuthorizeUrl } from "../utils";
+import { fetchUpstreamAuthToken, getUpstreamAuthorizeUrl } from "#/utils";
 import {
 	clientIdAlreadyApproved,
 	parseRedirectApproval,
 	renderApprovalDialog,
-} from "../workers-oauth-utils";
-import { SERVER_CONFIG, CLICKUP_CONFIG } from "../config";
-import { createSuccessResponse, createErrorPageResponse, createErrorResponse } from "../tools/error-handler";
-import type { UserProps } from "../types";
+} from "#/workers-oauth-utils";
+import { SERVER_CONFIG, CLICKUP_CONFIG } from "#/config";
+import { createSuccessResponse, createErrorPageResponse, createErrorResponse } from "#/api/common/error-handler";
+import type { UserProps } from "#/types";
 
 const app = new Hono<{ Bindings: Env & { OAUTH_PROVIDER: OAuthHelpers } }>();
 

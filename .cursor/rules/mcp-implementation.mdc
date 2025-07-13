@@ -1,0 +1,324 @@
+---
+description: MCP Tool の実装ガイドライン（AI向け最適化含む）
+globs: ["src/tools/**/*.ts", "src/index.ts"]
+alwaysApply: true
+---
+
+# MCP Tool 実装ガイドライン
+
+## 🎯 基本実装パターン
+
+### 1. 関数形式でのツール登録
+```typescript
+export function registerAuthTools(server: McpServer, clickupClient: ClickUpClient, getAccessToken: () => string) {
+  server.tool(
+    "getUserInfo",
+    "ClickUpから認証されたユーザー情報を取得します。ユーザーID・ユーザー名・メールアドレス・プロフィール画像URL・所属ワークスペース情報を含む詳細情報をJSON形式で表示。認証確認・ユーザー情報確認・アカウント設定時に使用",
+    {},
+    responseSchema,
+    async () => {
+      try {
+        const data = await clickupClient.getUserInfo(getAccessToken());
+        return {
+          content: [
+            {
+              text: JSON.stringify(data, null, 2),
+              type: "text",
+            },
+          ],
+        };
+      } catch (error) {
+        throw new Error(`ユーザー情報の取得に失敗しました: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  );
+}
+```
+
+### 2. レスポンススキーマ定義
+```typescript
+const responseSchema = {
+  type: "object",
+  properties: {
+    user: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "ユーザーID" },
+        username: { type: "string", description: "ユーザー名" },
+        email: { type: "string", description: "メールアドレス" },
+        profile_picture: { type: "string", description: "プロフィール画像URL" }
+      },
+      required: ["id", "username", "email"]
+    }
+  },
+  required: ["user"]
+};
+```
+
+### 3. 統一されたレスポンス形式
+```typescript
+// 成功時
+return {
+  content: [
+    {
+      text: JSON.stringify(data, null, 2),
+      type: "text",
+    },
+  ],
+};
+
+// エラー時
+throw new Error(`操作に失敗しました: ${error instanceof Error ? error.message : String(error)}`);
+```
+
+## 🔧 現在のツール構成
+
+### 認証関連ツール (`src/tools/auth.ts`)
+- `getUserInfo`: ユーザー情報取得
+- `getWorkspaces`: ワークスペース一覧取得
+
+### タスク関連ツール (`src/tools/task.ts`)
+- `getTask`: 特定タスクの詳細取得
+- `updateTask`: タスクの更新
+- `assignTask`: タスクの担当者設定
+
+### 検索関連ツール (`src/tools/search.ts`)
+- `getMyTasks`: 自分のタスク一覧取得
+- `searchTasks`: キーワードでタスク検索
+
+### 受信箱関連ツール (`src/tools/inbox.ts`)
+- `getInboxFutureTasks`: 今後予定のタスク
+- `getInboxDoneTasks`: 完了済みタスク
+- `getInboxUnscheduledTasks`: 未スケジュールタスク
+- `getInboxAll`: 全タスク
+
+## 🤖 AI向け MCP Tool 実装ガイドライン
+
+### ✅ 効果的な説明文の設計原則
+
+#### 基本形式
+```
+[動作] + [対象] + [詳細機能] + [取得/変更項目] + [出力形式] + [使用ケース]
+```
+
+#### ✅ 推奨する説明文（150-300文字）
+```typescript
+// 良い例
+"指定されたタスクIDのClickUpチケット詳細を完全取得します。タスク名・説明・現在ステータス・優先度・担当者一覧（名前・メール）・タグ・期限日・開始日・作成日・更新日・所属スペース/フォルダー/リスト情報・ClickUp直接リンクを含む全項目を構造化されたMarkdown形式で表示。進捗確認・レビュー・報告書作成に最適"
+
+"ClickUpチケットの基本情報を編集・更新するツールです。タスク名の変更（リネーム）・詳細説明文の追加/修正・ステータス変更（未開始→進行中→完了など）が可能。複数フィールドの同時一括更新に対応し、変更履歴も自動記録。プロジェクト管理・進捗更新・情報整理・ワークフロー進行に使用。更新後は変更内容をMarkdown形式で確認表示"
+```
+
+#### ❌ 避けるべき説明文
+```typescript
+// 悪い例（曖昧で判断に迷う）
+"タスクに関する操作を行います"
+"チケットを処理します"
+"情報を取得します"
+
+// 悪い例（過度に詳細で冗長）
+"ClickUpプラットフォームのAPIを使用してタスクの詳細情報を取得し、フォーマットされた形式で返却します"
+```
+
+### 説明文の最適化ルール
+
+1. **動詞を明確に**: 「確認」「更新」「振り分け」「検索」「取得」など具体的な動作
+2. **対象を明示**: 「チケット（タスク）」「ユーザー情報」「ワークスペース」
+3. **詳細な機能説明**: 取得/変更できる具体的項目を列挙
+4. **使用ケースを明記**: どのような場面で使うツールかを具体的に記述
+5. **出力形式を説明**: Markdown形式・構造化表示・視覚的表現（絵文字）等
+6. **専門用語を統一**: 「チケット（タスク）」のように併記で理解を助ける
+7. **敬語は使わない**: 「します」で統一、「いたします」は避ける
+
+## 📊 パラメータ設計の最適化
+
+### ✅ 効率的なパラメータ設計
+```typescript
+{
+    // 必須パラメータを最小限に
+    taskId: z.string().describe("確認するタスクのID"),
+    
+    // オプションパラメータはデフォルト値を設定
+    limit: z.number().optional().default(15).describe("取得件数（デフォルト: 15、最大: 100）"),
+    
+    // 関連パラメータをグループ化
+    assigneeIds: z.array(z.string()).optional().describe("追加する担当者のユーザーIDリスト"),
+    removeAssigneeIds: z.array(z.string()).optional().describe("削除する担当者のユーザーIDリスト"),
+    
+    // 型を明確に指定
+    includeArchived: z.boolean().optional().default(false).describe("アーカイブ済みを含むかどうか")
+}
+```
+
+### パラメータ最適化ルール
+
+1. **必須パラメータを最小限に**: AIの判断コストを削減
+2. **型を明確に指定**: `string`, `number`, `boolean`, `array`
+3. **説明は具体例を含む**: 「タスクのID（例: 123abc）」
+4. **関連パラメータをグループ化**: 同じ目的のパラメータは近くに配置
+5. **デフォルト値を活用**: オプション引数にはデフォルト値を設定
+
+## 🔄 レスポンススキーマの効率化
+
+### ✅ 効率的なレスポンス
+```typescript
+{
+    type: "object",
+    properties: {
+        // フラットな構造
+        id: { type: "string", description: "タスクID" },
+        name: { type: "string", description: "タスク名" },
+        status: { type: "string", description: "現在のステータス" },
+        // 必要最小限の情報
+        assignees: {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    id: { type: "string" },
+                    username: { type: "string" }
+                }
+            }
+        }
+    },
+    required: ["id", "name"] // 必須フィールドを明確に
+}
+```
+
+## 🛡️ エラーハンドリングの標準化
+
+### 統一されたエラー形式
+```typescript
+try {
+    const result = await clickupClient.someMethod();
+    return { content: [{ type: "text", text: formatResult(result) }] };
+} catch (error) {
+    // 標準化されたエラーメッセージ
+    throw new Error(`操作に失敗しました: ${error instanceof Error ? error.message : String(error)}`);
+}
+```
+
+### エラーメッセージの原則
+1. **一貫性**: 「〜に失敗しました」で統一
+2. **具体性**: 「チケット情報の取得に失敗」など操作を明記
+3. **簡潔性**: 20文字以内を目指す
+
+## 🚀 トークン効率化のテクニック
+
+### 1. レスポンス内容の最適化
+```typescript
+// ✅ 簡潔なレスポンス
+text: `# タスク詳細\n\n**${task.name}**\n\nID: ${task.id}\n\n## 基本情報\n- **ステータス**: ${task.status}\n...`
+
+// ❌ 冗長なレスポンス
+text: `タスクの詳細情報を以下に示します。このタスクは...（長い説明）`
+```
+
+### 2. 構造化された出力
+- Markdownを活用した見やすい構造
+- 箇条書きでの情報整理
+- 絵文字を使った視覚的な区別（✅ ❌ 👥 📋）
+
+### 3. 必要最小限の情報
+```typescript
+// AIが判断に必要な情報のみを含める
+const essentialData = {
+    id: task.id,
+    name: task.name,
+    status: task.status,
+    assignees: task.assignees.map(a => a.username)
+};
+```
+
+## 📋 Thinking削減のためのベストプラクティス
+
+### 1. 明確な命名規則
+```typescript
+// 動詞 + 対象 の形式
+"getTask"      // 取得 + タスク
+"updateTask"   // 更新 + タスク  
+"assignTask"   // 割り当て + タスク
+"searchTasks"  // 検索 + タスク（複数）
+```
+
+### 2. 予測可能なパラメータ名
+```typescript
+// 一貫した命名
+taskId         // 常にこの形式
+assigneeIds    // 複数の場合は複数形
+listId         // 対象を明確に
+workspaceId    // スコープを明示
+```
+
+### 3. スキーマ説明の標準化
+```typescript
+// パターン化された説明文
+{ type: "string", description: "〜のID" }
+{ type: "string", description: "新しい〜" }
+{ type: "array", description: "〜のリスト" }
+{ type: "boolean", description: "〜かどうか" }
+```
+
+## 🔧 アクセストークンの取得パターン
+```typescript
+// init()メソッド内で定義
+const getAccessToken = () => this.props.accessToken;
+
+// 各ツール登録関数に渡す
+registerAuthTools(this.server, clickupClient, getAccessToken);
+registerTaskTools(this.server, clickupClient, getAccessToken);
+registerSearchTools(this.server, clickupClient, getAccessToken);
+```
+
+## 📝 新しいツール追加手順
+
+### 既存カテゴリにツールを追加
+1. 該当するAPIクライアントクラスにメソッドを追加
+2. `ClickUpClient`クラスに統合メソッドを追加
+3. 対応するツール登録関数にツールを追加
+4. 適切なレスポンススキーマを定義
+5. エラーハンドリングを実装
+6. 詳細な説明文を作成（150-300文字）
+
+### 新しい機能カテゴリ追加
+1. `src/api/` に新しいAPIクライアントクラスを作成
+2. `src/tools/` に新しいツール登録関数を作成
+3. `ClickUpClient`クラスに統合
+4. `src/index.ts`で登録関数を呼び出し
+
+## ✅ 実装チェックリスト
+
+### ツール定義時
+- [ ] 説明文は150-300文字で具体的
+- [ ] パラメータは必要最小限
+- [ ] 型定義が明確
+- [ ] レスポンススキーマがフラット構造
+- [ ] エラーハンドリングが統一されている
+
+### AI使用体験
+- [ ] 説明文から用途が即座に判断できる
+- [ ] パラメータが直感的に理解できる
+- [ ] エラーメッセージが分かりやすい
+- [ ] レスポンスが構造化されている
+
+### 効果測定指標
+1. **Thinking時間**: ツール選択の迷い時間
+2. **トークン使用量**: リクエスト/レスポンスサイズ
+3. **エラー率**: 不適切なツール使用の頻度
+4. **ユーザー満足度**: 期待通りの結果を得られる割合
+
+## 🌐 日本語対応規則
+
+### 文言統一
+- **ツール説明文**: 日本語で記述
+- **エラーメッセージ**: 日本語で提供
+- **敬語**: 「します」で統一、「いたします」は避ける
+- **専門用語**: 「チケット（タスク）」のように併記
+
+### レスポンス形式
+```typescript
+// Markdown形式での構造化表示
+text: `# タスク詳細\n\n**${task.name}**\n\nID: ${task.id}\n\n## 基本情報\n- **ステータス**: ${task.status}\n...`
+```
+
+このガイドラインに従うことで、AIが効率的にMCPツールを使用し、ユーザーエクスペリエンスを向上させることができます。

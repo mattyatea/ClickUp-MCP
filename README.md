@@ -8,6 +8,7 @@ ClickUpのOAuth認証を使用したMCP (Model Context Protocol) サーバーで
 - ✅ Cloudflare公式AgentsSDKによるリアルタイム通信
 - ✅ MCP (Model Context Protocol) サポート
 - ✅ ClickUp API との統合
+- ✅ **詳細タスク検索** - 複数条件でのタスク絞り込み
 - ✅ Webhook サポート
 - ✅ Cloudflare Workers での動作
 
@@ -169,6 +170,20 @@ OAuth認証後、以下のMCPツールが利用可能になります：
 ClickUpのWebhookイベントを監視して通知を送信
 - `eventType`: 監視するイベントタイプ (task_created, task_updated等)
 - `message`: 通知メッセージ
+
+#### `searchTasksAdvanced` (新機能)
+詳細な条件でタスクを絞り込み検索
+- `filters`: 詳細検索フィルター（以下の条件を指定可能）
+  - **基本検索**: キーワード、チーム指定
+  - **ステータス**: 進行中、完了、レビュー中など
+  - **優先度**: 緊急、高、普通、低
+  - **担当者**: 特定のユーザーでフィルタリング
+  - **日付範囲**: 期日、作成日、更新日での範囲指定
+  - **タグ**: 特定のタグでフィルタリング
+  - **カスタムフィールド**: カスタムフィールドの値での絞り込み
+  - **親タスク**: サブタスクでの絞り込み
+
+**使用例**: [examples/advanced-search-examples.md](examples/advanced-search-examples.md) を参照
 
 ### Webhook
 
