@@ -115,7 +115,7 @@ async function redirectToClickUp(
 			location: getUpstreamAuthorizeUrl({
 				client_id: env.CLICKUP_CLIENT_ID,
 				redirect_uri: new URL("/callback", request.url).href,
-				state: btoa(JSON.stringify(oauthReqInfo)),
+				state: btoa(encodeURIComponent(JSON.stringify(oauthReqInfo))),
 				upstream_url: CLICKUP_CONFIG.authorizeUrl,
 			}),
 		},
@@ -139,7 +139,7 @@ app.get("/callback", async (c) => {
 			return createAdaptiveErrorResponse(c.req.raw, "認証状態パラメータが見つかりません。", 400, "missing_state");
 		}
 
-		const oauthReqInfo = JSON.parse(atob(stateParam)) as AuthRequest;
+		const oauthReqInfo = JSON.parse(decodeURIComponent(atob(stateParam))) as AuthRequest;
 		if (!oauthReqInfo.clientId) {
 			return createAdaptiveErrorResponse(c.req.raw, "無効な認証状態です。認証プロセスを最初からやり直してください。", 400, "invalid_state");
 		}
@@ -198,7 +198,8 @@ app.get("/callback", async (c) => {
 			} as UserProps,
 			request: oauthReqInfo,
 			scope: oauthReqInfo.scope,
-			userId: username,
+			// ユーザーIDとして安全な文字列を使用（日本語ユーザー名対応）
+			userId: id, // usernameの代わりにidを使用
 		});
 
 		return Response.redirect(redirectTo);
