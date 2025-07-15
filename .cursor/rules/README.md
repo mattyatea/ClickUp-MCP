@@ -7,7 +7,9 @@
 ### 🔄 **汎用的な開発規則**（どのプロジェクトでも使用可能）
 
 #### `development-workflow.mdc`
+
 **環境設定・デプロイ・開発プロセス**
+
 - 🔧 環境設定（シークレット、KV、環境変数）
 - 🚀 開発サーバーの起動方法
 - 📦 デプロイメント手順
@@ -16,7 +18,9 @@
 - 🚨 トラブルシューティング
 
 #### `typescript-coding.mdc`
+
 **TypeScriptコーディング規約**
+
 - 🎯 基本方針（厳密モード、型安全性）
 - 📝 型定義パターン
 - 🔧 関数定義規約
@@ -25,7 +29,9 @@
 - 🎨 命名規約
 
 #### `code-quality.mdc`
+
 **品質管理・テスト・禁止事項**
+
 - 🚫 禁止事項（any型、機密情報ハードコード等）
 - ✅ 品質基準とチェックリスト
 - 🧪 テスト戦略
@@ -36,7 +42,9 @@
 ### 🎯 **プロジェクト固有の規則**（このClickUpプロジェクト専用）
 
 #### `mcp-implementation.mdc`
+
 **MCP Tool実装ガイドライン（詳細版）**
+
 - 🛠️ ツール登録パターン
 - 📝 説明文最適化（AI向けガイドライン含む）
 - 🔄 レスポンススキーマ設計
@@ -45,7 +53,9 @@
 - 🚀 トークン効率化テクニック
 
 #### `clickup-integration.mdc`
+
 **ClickUp API統合のベストプラクティス**
+
 - 🔗 API呼び出しパターン
 - 📊 レート制限対応
 - 🔐 認証・セキュリティ
@@ -53,7 +63,9 @@
 - 📋 主要エンドポイント一覧
 
 #### `architecture.mdc`
+
 **アーキテクチャパターン**
+
 - 🏗️ MCPサーバー実装構造
 - 🔌 依存性注入パターン
 - 📂 機能別モジュール分割
@@ -62,18 +74,19 @@
 
 ## 🔍 どのファイルを参照すべきか
 
-| やりたいこと | 参照するファイル |
-|-------------|----------------|
-| 開発環境の設定 | `development-workflow.mdc` |
-| TypeScriptコードの書き方 | `typescript-coding.mdc` |
-| コード品質の確保 | `code-quality.mdc` |
-| MCPツールの実装 | `mcp-implementation.mdc` |
-| ClickUp API呼び出し | `clickup-integration.mdc` |
-| 全体的な設計パターン | `architecture.mdc` |
+| やりたいこと             | 参照するファイル           |
+| ------------------------ | -------------------------- |
+| 開発環境の設定           | `development-workflow.mdc` |
+| TypeScriptコードの書き方 | `typescript-coding.mdc`    |
+| コード品質の確保         | `code-quality.mdc`         |
+| MCPツールの実装          | `mcp-implementation.mdc`   |
+| ClickUp API呼び出し      | `clickup-integration.mdc`  |
+| 全体的な設計パターン     | `architecture.mdc`         |
 
 ## 🚀 新しい開発者向けクイックスタート
 
 ### 1. 環境設定（初回のみ）
+
 ```bash
 # development-workflow.mdc を参照
 pnpm install
@@ -84,6 +97,7 @@ npx wrangler kv:namespace create "OAUTH_KV"
 ```
 
 ### 2. 開発開始
+
 ```bash
 # 開発サーバー起動
 pnpm dev
@@ -98,16 +112,19 @@ npx prettier --write .
 ### 3. 新機能開発
 
 #### MCPツールを追加する場合
+
 1. `mcp-implementation.mdc` を参照
 2. `src/tools/` に新しいツールファイルを作成
 3. `src/index.ts` でツールを登録
 
 #### ClickUp API を呼び出す場合
+
 1. `clickup-integration.mdc` を参照
 2. `src/api/` に新しいAPIクライアントを作成
 3. エラーハンドリングを統一
 
 ### 4. コード品質確保
+
 ```bash
 # 品質チェック（コミット前に必須）
 pnpm type-check
@@ -116,23 +133,25 @@ npx prettier --write .
 
 ## 📋 各ファイルの`alwaysApply`設定
 
-| ファイル | `alwaysApply` | 理由 |
-|---------|---------------|------|
-| `development-workflow.mdc` | `true` | 開発プロセスは常に適用 |
-| `typescript-coding.mdc` | `true` | TypeScriptコーディング規約は常に適用 |
-| `code-quality.mdc` | `true` | 品質管理は常に適用 |
-| `mcp-implementation.mdc` | `true` | MCPツール関連は常に適用 |
-| `clickup-integration.mdc` | `true` | ClickUp API関連は常に適用 |
-| `architecture.mdc` | `true` | アーキテクチャは常に適用 |
+| ファイル                   | `alwaysApply` | 理由                                 |
+| -------------------------- | ------------- | ------------------------------------ |
+| `development-workflow.mdc` | `true`        | 開発プロセスは常に適用               |
+| `typescript-coding.mdc`    | `true`        | TypeScriptコーディング規約は常に適用 |
+| `code-quality.mdc`         | `true`        | 品質管理は常に適用                   |
+| `mcp-implementation.mdc`   | `true`        | MCPツール関連は常に適用              |
+| `clickup-integration.mdc`  | `true`        | ClickUp API関連は常に適用            |
+| `architecture.mdc`         | `true`        | アーキテクチャは常に適用             |
 
 ## 🔄 ファイルの更新・保守
 
 ### 更新タイミング
+
 - **汎用ファイル**: 新しいベストプラクティス発見時
 - **プロジェクト固有ファイル**: 機能追加・変更時
 - **全体**: 大きな設計変更時
 
 ### 更新手順
+
 1. 該当するファイルを編集
 2. `git add .cursor/rules/`
 3. `git commit -m "docs: ルール更新"`
@@ -141,13 +160,17 @@ npx prettier --write .
 ## 📝 よくある質問
 
 ### Q: 新しいルールを追加したい
+
 A: 適切な既存ファイルに追加するか、新しいファイルを作成してください。
 
 ### Q: 他のプロジェクトでも使いたい
+
 A: 汎用的なファイル（development-workflow, typescript-coding, code-quality）をコピーして使用してください。
 
 ### Q: ルールが矛盾している
+
 A: 優先順位は以下の通りです：
+
 1. プロジェクト固有 > 汎用的
 2. 新しいルール > 古いルール
 3. 具体的 > 抽象的

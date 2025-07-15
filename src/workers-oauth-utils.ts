@@ -46,9 +46,7 @@ function decodeState<T = any>(encoded: string): T {
  */
 async function importKey(secret: string): Promise<CryptoKey> {
   if (!secret) {
-    throw new Error(
-      "COOKIE_SECRET is not defined. A secret key is required for signing cookies.",
-    );
+    throw new Error("COOKIE_SECRET is not defined. A secret key is required for signing cookies.");
   }
   const enc = new TextEncoder();
   return crypto.subtle.importKey(
@@ -82,17 +80,11 @@ async function signData(key: CryptoKey, data: string): Promise<string> {
  * @param data - The original data that was signed.
  * @returns A promise resolving to true if the signature is valid, false otherwise.
  */
-async function verifySignature(
-  key: CryptoKey,
-  signatureHex: string,
-  data: string,
-): Promise<boolean> {
+async function verifySignature(key: CryptoKey, signatureHex: string, data: string): Promise<boolean> {
   const enc = new TextEncoder();
   try {
     // Convert hex signature back to ArrayBuffer
-    const signatureBytes = new Uint8Array(
-      signatureHex.match(/.{1,2}/g)!.map((byte) => Number.parseInt(byte, 16)),
-    );
+    const signatureBytes = new Uint8Array(signatureHex.match(/.{1,2}/g)!.map((byte) => Number.parseInt(byte, 16)));
     return await crypto.subtle.verify("HMAC", key, signatureBytes.buffer, enc.encode(data));
   } catch (e) {
     // Handle errors during hex parsing or verification
@@ -107,10 +99,7 @@ async function verifySignature(
  * @param secret - The secret key used for signing.
  * @returns A promise resolving to the list of approved client IDs if the cookie is valid, otherwise null.
  */
-async function getApprovedClientsFromCookie(
-  cookieHeader: string | null,
-  secret: string,
-): Promise<string[] | null> {
+async function getApprovedClientsFromCookie(cookieHeader: string | null, secret: string): Promise<string[] | null> {
   if (!cookieHeader) return null;
 
   const cookies = cookieHeader.split(";").map((c) => c.trim());
@@ -166,11 +155,7 @@ async function getApprovedClientsFromCookie(
  * @param cookieSecret - The secret key used to sign/verify the approval cookie.
  * @returns A promise resolving to true if the client ID is in the list of approved clients in a valid cookie, false otherwise.
  */
-export async function clientIdAlreadyApproved(
-  request: Request,
-  clientId: string,
-  cookieSecret: string,
-): Promise<boolean> {
+export async function clientIdAlreadyApproved(request: Request, clientId: string, cookieSecret: string): Promise<boolean> {
   if (!clientId) return false;
   const cookieHeader = request.headers.get("Cookie");
   const approvedClients = await getApprovedClientsFromCookie(cookieHeader, cookieSecret);
@@ -230,7 +215,7 @@ export interface ApprovalDialogOptions {
 /**
  * Generates the HTML content for the OAuth approval dialog
  * @param serverName - The sanitized server name
- * @param clientName - The sanitized client name  
+ * @param clientName - The sanitized client name
  * @param serverDescription - The sanitized server description
  * @param logoUrl - The sanitized logo URL
  * @param clientUri - The sanitized client URI
@@ -586,8 +571,9 @@ function generateApprovalDialogHtml(
                   </div>
                 </div>
                 
-                ${clientUri
-      ? `
+                ${
+                  clientUri
+                    ? `
                   <div class="client-detail">
                     <div class="detail-label">ウェブサイト:</div>
                     <div class="detail-value">
@@ -597,11 +583,12 @@ function generateApprovalDialogHtml(
                     </div>
                   </div>
                 `
-      : ""
-    }
+                    : ""
+                }
                 
-                ${policyUri
-      ? `
+                ${
+                  policyUri
+                    ? `
                   <div class="client-detail">
                     <div class="detail-label">プライバシーポリシー:</div>
                     <div class="detail-value">
@@ -611,11 +598,12 @@ function generateApprovalDialogHtml(
                     </div>
                   </div>
                 `
-      : ""
-    }
+                    : ""
+                }
                 
-                ${tosUri
-      ? `
+                ${
+                  tosUri
+                    ? `
                   <div class="client-detail">
                     <div class="detail-label">利用規約:</div>
                     <div class="detail-value">
@@ -625,11 +613,12 @@ function generateApprovalDialogHtml(
                     </div>
                   </div>
                 `
-      : ""
-    }
+                    : ""
+                }
                 
-                ${redirectUris.length > 0
-      ? `
+                ${
+                  redirectUris.length > 0
+                    ? `
                   <div class="client-detail">
                     <div class="detail-label">リダイレクトURI:</div>
                     <div class="detail-value">
@@ -637,18 +626,19 @@ function generateApprovalDialogHtml(
                     </div>
                   </div>
                 `
-      : ""
-    }
+                    : ""
+                }
                 
-                ${contacts
-      ? `
+                ${
+                  contacts
+                    ? `
                   <div class="client-detail">
                     <div class="detail-label">連絡先:</div>
                     <div class="detail-value">${contacts}</div>
                   </div>
                 `
-      : ""
-    }
+                    : ""
+                }
               </div>
               
               <div class="info-message">
@@ -698,16 +688,10 @@ export function renderApprovalDialog(request: Request, options: ApprovalDialogOp
   const tosUri = client?.tosUri ? sanitizeHtml(client.tosUri) : "";
 
   // Client contacts
-  const contacts =
-    client?.contacts && client.contacts.length > 0
-      ? sanitizeHtml(client.contacts.join(", "))
-      : "";
+  const contacts = client?.contacts && client.contacts.length > 0 ? sanitizeHtml(client.contacts.join(", ")) : "";
 
   // Get redirect URIs
-  const redirectUris =
-    client?.redirectUris && client.redirectUris.length > 0
-      ? client.redirectUris.map((uri) => sanitizeHtml(uri))
-      : [];
+  const redirectUris = client?.redirectUris && client.redirectUris.length > 0 ? client.redirectUris.map((uri) => sanitizeHtml(uri)) : [];
 
   // Generate HTML for the approval dialog
   const htmlContent = generateApprovalDialogHtml(
@@ -750,10 +734,7 @@ export interface ParsedApprovalResult {
  * @returns A promise resolving to an object containing the parsed state and necessary headers.
  * @throws If the request method is not POST, form data is invalid, or state is missing.
  */
-export async function parseRedirectApproval(
-  request: Request,
-  cookieSecret: string,
-): Promise<ParsedApprovalResult> {
+export async function parseRedirectApproval(request: Request, cookieSecret: string): Promise<ParsedApprovalResult> {
   if (request.method !== "POST") {
     throw new Error("Invalid request method. Expected POST.");
   }
@@ -778,15 +759,12 @@ export async function parseRedirectApproval(
   } catch (e) {
     console.error("Error processing form submission:", e);
     // Rethrow or handle as appropriate, maybe return a specific error response
-    throw new Error(
-      `Failed to parse approval form: ${e instanceof Error ? e.message : String(e)}`,
-    );
+    throw new Error(`Failed to parse approval form: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   // Get existing approved clients
   const cookieHeader = request.headers.get("Cookie");
-  const existingApprovedClients =
-    (await getApprovedClientsFromCookie(cookieHeader, cookieSecret)) || [];
+  const existingApprovedClients = (await getApprovedClientsFromCookie(cookieHeader, cookieSecret)) || [];
 
   // Add the newly approved client ID (avoid duplicates)
   const updatedApprovedClients = Array.from(new Set([...existingApprovedClients, clientId]));
@@ -811,10 +789,5 @@ export async function parseRedirectApproval(
  * @returns A safe string with HTML special characters escaped
  */
 function sanitizeHtml(unsafe: string): string {
-  return unsafe
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+  return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }

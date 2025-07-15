@@ -1,23 +1,23 @@
 /**
  * ClickUp MCP Server - Error Handler
- * 
+ *
  * エラーハンドリングとAPIレスポンス生成を担当するユーティリティ。
  * 統一されたエラーレスポンス形式を提供します。
  */
 
 /** エラーレスポンスの型定義 */
 export interface ErrorResponse {
-    success: false;
-    error: string;
-    code?: string;
-    timestamp: string;
+  success: false;
+  error: string;
+  code?: string;
+  timestamp: string;
 }
 
 /** 成功レスポンスの型定義 */
 export interface SuccessResponse<T = any> {
-    success: true;
-    data: T;
-    timestamp: string;
+  success: true;
+  data: T;
+  timestamp: string;
 }
 
 /** APIレスポンスの共通型 */
@@ -28,14 +28,14 @@ export type ApiResponse<T = any> = ErrorResponse | SuccessResponse<T>;
  * HTTPステータスコードとエラーコードを含むエラー情報を管理
  */
 export class ApiError extends Error {
-    constructor(
-        message: string,
-        public statusCode: number = 500,
-        public code?: string
-    ) {
-        super(message);
-        this.name = 'ApiError';
-    }
+  constructor(
+    message: string,
+    public statusCode: number = 500,
+    public code?: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
 }
 
 /**
@@ -45,17 +45,19 @@ export class ApiError extends Error {
  * @param code エラーコード（オプション）
  * @returns HTMLエラーページのコンテンツ
  */
-function generateErrorPageHtml(
-    error: string,
-    statusCode: number,
-    code?: string
-): string {
-    const errorTitle = statusCode === 401 ? 'アクセスが拒否されました' :
-        statusCode === 403 ? 'アクセス権限がありません' :
-            statusCode === 404 ? 'ページが見つかりません' :
-                statusCode >= 500 ? 'サーバーエラー' : 'エラー';
+function generateErrorPageHtml(error: string, statusCode: number, code?: string): string {
+  const errorTitle =
+    statusCode === 401
+      ? "アクセスが拒否されました"
+      : statusCode === 403
+        ? "アクセス権限がありません"
+        : statusCode === 404
+          ? "ページが見つかりません"
+          : statusCode >= 500
+            ? "サーバーエラー"
+            : "エラー";
 
-    return `
+  return `
     <!DOCTYPE html>
     <html lang="ja">
       <head>
@@ -160,18 +162,18 @@ function generateErrorPageHtml(
           <div class="error-icon">⚠️</div>
           <h1 class="error-title">${errorTitle}</h1>
           <p class="error-message">${error}</p>
-          ${code ? `<div class="error-code">エラーコード: ${code}</div>` : ''}
+          ${code ? `<div class="error-code">エラーコード: ${code}</div>` : ""}
           <a href="javascript:history.back()" class="back-button">戻る</a>
           <div class="timestamp">
-            ${new Date().toLocaleString('ja-JP', {
-        timeZone: 'Asia/Tokyo',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-    })}
+            ${new Date().toLocaleString("ja-JP", {
+              timeZone: "Asia/Tokyo",
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            })}
           </div>
         </div>
       </body>
@@ -186,24 +188,20 @@ function generateErrorPageHtml(
  * @param code エラーコード（オプション）
  * @returns Responseオブジェクト
  */
-export function createErrorResponse(
-    error: string,
-    statusCode: number = 500,
-    code?: string
-): Response {
-    const errorResponse: ErrorResponse = {
-        success: false,
-        error,
-        code,
-        timestamp: new Date().toISOString(),
-    };
+export function createErrorResponse(error: string, statusCode: number = 500, code?: string): Response {
+  const errorResponse: ErrorResponse = {
+    success: false,
+    error,
+    code,
+    timestamp: new Date().toISOString(),
+  };
 
-    return new Response(JSON.stringify(errorResponse), {
-        status: statusCode,
-        headers: {
-            'Content-Type': 'application/json',
-        },
-    });
+  return new Response(JSON.stringify(errorResponse), {
+    status: statusCode,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
 }
 
 /**
@@ -213,19 +211,15 @@ export function createErrorResponse(
  * @param code エラーコード（オプション）
  * @returns HTMLエラーページのResponseオブジェクト
  */
-export function createErrorPageResponse(
-    error: string,
-    statusCode: number = 500,
-    code?: string
-): Response {
-    const htmlContent = generateErrorPageHtml(error, statusCode, code);
+export function createErrorPageResponse(error: string, statusCode: number = 500, code?: string): Response {
+  const htmlContent = generateErrorPageHtml(error, statusCode, code);
 
-    return new Response(htmlContent, {
-        status: statusCode,
-        headers: {
-            'Content-Type': 'text/html; charset=utf-8',
-        },
-    });
+  return new Response(htmlContent, {
+    status: statusCode,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+    },
+  });
 }
 
 /**
@@ -234,22 +228,19 @@ export function createErrorPageResponse(
  * @param statusCode HTTPステータスコード
  * @returns Responseオブジェクト
  */
-export function createSuccessResponse<T>(
-    data: T,
-    statusCode: number = 200
-): Response {
-    const successResponse: SuccessResponse<T> = {
-        success: true,
-        data,
-        timestamp: new Date().toISOString(),
-    };
+export function createSuccessResponse<T>(data: T, statusCode: number = 200): Response {
+  const successResponse: SuccessResponse<T> = {
+    success: true,
+    data,
+    timestamp: new Date().toISOString(),
+  };
 
-    return new Response(JSON.stringify(successResponse), {
-        status: statusCode,
-        headers: {
-            'Content-Type': 'application/json',
-        },
-    });
+  return new Response(JSON.stringify(successResponse), {
+    status: statusCode,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
 }
 
 /**
@@ -258,15 +249,15 @@ export function createSuccessResponse<T>(
  * @returns エラーレスポンス
  */
 export function handleError(error: unknown): Response {
-    console.error('エラーが発生しました:', error);
+  console.error("エラーが発生しました:", error);
 
-    if (error instanceof ApiError) {
-        return createErrorResponse(error.message, error.statusCode, error.code);
-    }
+  if (error instanceof ApiError) {
+    return createErrorResponse(error.message, error.statusCode, error.code);
+  }
 
-    if (error instanceof Error) {
-        return createErrorResponse(error.message);
-    }
+  if (error instanceof Error) {
+    return createErrorResponse(error.message);
+  }
 
-    return createErrorResponse('予期しないエラーが発生しました');
-} 
+  return createErrorResponse("予期しないエラーが発生しました");
+}

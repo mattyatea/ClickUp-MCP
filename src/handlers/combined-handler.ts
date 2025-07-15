@@ -1,6 +1,6 @@
 /**
  * ClickUp MCP Server - Combined Handler
- * 
+ *
  * OAuthハンドラーとサイトハンドラーを統合するメインハンドラー。
  */
 

@@ -146,7 +146,7 @@ Cloudflareの公式AgentsSDKを使用しているため、MCPクライアント�
 
 ```javascript
 // MCPクライアントの設定例
-const mcpServerUrl = 'https://clickup-mcp-server.your-subdomain.workers.dev/sse';
+const mcpServerUrl = "https://clickup-mcp-server.your-subdomain.workers.dev/sse";
 // AgentsSDKが自動的にSSE接続とリアルタイム通信を管理
 ```
 
@@ -155,24 +155,32 @@ const mcpServerUrl = 'https://clickup-mcp-server.your-subdomain.workers.dev/sse'
 OAuth認証後、以下のMCPツールが利用可能になります：
 
 #### `getUserInfo`
+
 認証済みユーザーの情報を取得
 
 #### `getWorkspaces`
+
 ユーザーのClickUpワークスペース一覧を取得
 
 #### `getTasks`
+
 指定されたリストのタスクを取得
+
 - `listId`: ClickUpリストのID
 - `archived`: アーカイブされたタスクを含めるかどうか (オプション)
 - `page`: ページネーション用のページ番号 (オプション)
 
 #### `sendClickUpNotification`
+
 ClickUpのWebhookイベントを監視して通知を送信
+
 - `eventType`: 監視するイベントタイプ (task_created, task_updated等)
 - `message`: 通知メッセージ
 
 #### `searchTasksAdvanced` (新機能)
+
 詳細な条件でタスクを絞り込み検索
+
 - `filters`: 詳細検索フィルター（以下の条件を指定可能）
   - **基本検索**: キーワード、チーム指定
   - **ステータス**: 進行中、完了、レビュー中など
@@ -197,17 +205,21 @@ https://clickup-mcp-server.your-subdomain.workers.dev/webhook/clickup
 ## API エンドポイント
 
 ### 認証
+
 - `GET /authorize` - OAuth認証開始
 - `POST /authorize` - 認証承認
 - `GET /callback` - OAuth コールバック
 
 ### MCP
+
 - `/sse` - MCP接続エンドポイント（AgentsSDKが自動管理）
 
 ### Webhook
+
 - `POST /webhook/clickup` - ClickUp Webhook受信
 
 ### その他
+
 - `GET /health` - ヘルスチェック
 
 ## ディレクトリ構造
@@ -286,6 +298,7 @@ npx wrangler tail
 ## トラブルシューティング
 
 ### デプロイエラー
+
 ```bash
 # Wrangler認証確認
 npx wrangler whoami
@@ -298,17 +311,20 @@ npx wrangler deploy --verbose
 ```
 
 ### MCP接続エラー
+
 - OAuth認証が正しく完了しているか確認
 - MCPクライアントの設定が正しいか確認
 - ネットワーク接続を確認
 
 ### OAuth認証エラー
+
 - ClickUp Client ID/Secret が正しく設定されているか確認
 - Redirect URL が正しく設定されているか確認
 - Cookie暗号化キーが32文字であることを確認
 - **環境変数が正しく設定されているか確認**
 
 ### KVエラー
+
 ```bash
 # KV接続テスト
 npx wrangler kv:key list --binding=OAUTH_KV
@@ -318,6 +334,7 @@ npx wrangler kv:key get "test-key" --binding=OAUTH_KV
 ```
 
 ### Webhook受信エラー
+
 - ClickUpでWebhook URLが正しく設定されているか確認
 - Webhook エンドポイントが公開されているか確認
 
