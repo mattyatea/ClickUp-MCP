@@ -9,7 +9,7 @@ import { Hono } from "hono";
 const app = new Hono<{ Bindings: Env }>();
 
 app.get("/", async (c) => {
-  return c.html(`
+	return c.html(`
 <!DOCTYPE html>
 <html lang="ja">
 <head>

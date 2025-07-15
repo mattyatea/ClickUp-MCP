@@ -1,0 +1,32 @@
+{
+	"permissions": {
+		"allow": [
+			"Bash(pnpm type-check:*)",
+			"Bash(pnpm fix:*)",
+			"Bash(pnpm cf-typegen:*)"
+		],
+		"deny": []
+	},
+	"hooks": {
+		"PostToolUse": [
+			{
+				"matcher": "Write|Edit|MultiEdit|Update",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "jq -r '.tool_input.file_path | select(endswith(\".ts\") or endswith(\".js\") or endswith(\".json\"))' | xargs -r pnpm fix && pnpm type-check"
+					}
+				]
+			},
+			{
+				"matcher": "Write|Edit|MultiEdit|Update",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "jq -r '.tool_input.file_path | select(. == \"wrangler.jsonc\" or . == \".env\" or . == \".env.local\")' | xargs -r sh -c 'if [ -n \"$0\" ]; then pnpm cf-typegen; fi'"
+					}
+				]
+			}
+		]
+	}
+}

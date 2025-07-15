@@ -30,8 +30,10 @@
 
 ### コード品質コマンド
 
-- `npx prettier --write .` - Prettierを使用してコードをフォーマット
-- `npx tsc --noEmit` - コンパイルせずに型チェック
+- `pnpm format` - Biomeを使用してコードをフォーマット
+- `pnpm lint` - Biomeによるリント
+- `pnpm fix` - Biomeによる自動修正
+- `pnpm type-check` - TypeScriptの型チェック
 
 ## アーキテクチャ
 
@@ -65,19 +67,24 @@ src/
 ├── types.ts                    # TypeScript型定義
 ├── utils.ts                    # ユーティリティ関数
 ├── workers-oauth-utils.ts      # OAuth専用ユーティリティ
+├── api/                        # ClickUp APIクライアント
+│   ├── index.ts                # 統合APIクライアント（ClickUpClient）
+│   ├── basic.ts                # 基本的なタスク操作（取得・更新・担当者変更）
+│   ├── search.ts               # タスク検索・一覧機能
+│   ├── advanced-search.ts      # 詳細絞り込み検索機能
+│   └── common/                 # 共通ユーティリティ
+│       └── error-handler.ts    # エラーハンドリングユーティリティ
 ├── auth/                       # 認証モジュール
 │   └── user.ts                 # ユーザー認証ロジック
 ├── handlers/                   # リクエストハンドラー
 │   ├── combined-handler.ts     # メインルーティングロジック
 │   ├── oauth-handler.ts        # OAuthフローハンドラー
 │   └── site-handler.ts         # サイトとドキュメンテーションハンドラー
-├── tools/                      # MCPツールとユーティリティ
-│   ├── basic.ts                # 基本的なタスク操作
-│   ├── search.ts               # タスク検索機能
-│   ├── inbox.ts                # 受信箱管理
+├── tools/                      # MCPツール登録関数
 │   ├── index.ts                # ツールオーケストレーション
-│   └── common/                 # 共通ユーティリティ
-│       └── error-handler.ts    # エラーハンドリングユーティリティ
+│   ├── auth.ts                 # 認証関連ツール登録
+│   ├── task.ts                 # タスク管理ツール登録
+│   └── search.ts               # 検索ツール登録
 └── utils/                      # ユーティリティ関数
     └── formatters.ts           # データフォーマッティングユーティリティ
 ```
@@ -88,8 +95,11 @@ src/
 - `src/handlers/combined-handler.ts` - 全てのハンドラーを統合するメインルーティングロジック
 - `src/handlers/oauth-handler.ts` - OAuthフローハンドラー（`/authorize`、`/callback`、`/webhook/clickup`エンドポイント）
 - `src/handlers/site-handler.ts` - サイトとドキュメンテーションハンドラー（`/`エンドポイント）
-- `src/tools/index.ts` - 全てのAPI操作を含むClickUp APIクライアントツール
-- `src/tools/common/error-handler.ts` - APIレスポンス用のエラーハンドリングユーティリティ
+- `src/api/index.ts` - 統合ClickUp APIクライアント（ClickUpClient）
+- `src/api/basic.ts` - 基本的なタスク操作の実装
+- `src/api/search.ts` - タスク検索機能の実装
+- `src/api/advanced-search.ts` - 詳細検索機能の実装
+- `src/tools/index.ts` - MCPツール登録のオーケストレーション
 
 ### コアアーキテクチャパターン
 
@@ -103,8 +113,7 @@ src/
 
 - **ユーザー & チーム**: `getUserInfo`、`getWorkspaces`
 - **タスク管理**: `getTask`、`updateTask`、`assignTask`
-- **タスク発見**: `getMyTasks`、`searchTasks`
-- **受信箱機能**: `getInboxFutureTasks`、`getInboxDoneTasks`、`getInboxUnscheduledTasks`、`getInboxAll`
+- **タスク発見**: `getMyTasks`、`searchTasks`、`advancedSearchTasks`
 - **ユーティリティ**: `add`（テスト用の基本的な数学演算）
 
 ## 環境設定
@@ -154,7 +163,7 @@ src/
 ### 開発のベストプラクティス
 
 - コミット前に常に`pnpm type-check`を実行
-- 一貫したコードフォーマットのためにPrettierを使用
+- 一貫したコードフォーマットのためにBiomeを使用（`pnpm format`）
 - TypeScriptのstrict modeガイドラインに従う
 - 中央集権化されたエラーハンドラーを使用して適切なエラーハンドリングを実装
 - 入力検証にZodスキーマを使用
@@ -180,7 +189,7 @@ src/
 ### 開発依存関係
 
 - `@cloudflare/workers-types` (^4.20250620.0) - Cloudflare Workers型定義
-- `prettier` (^3.5.3) - コードフォーマッティング
+- `@biomejs/biome` (^1.10.2) - コードフォーマッティングとリンティング
 - `typescript` (^5.8.3) - TypeScriptコンパイラ
 - `wrangler` (^4.20.5) - Cloudflare Workers CLI
 
@@ -188,7 +197,7 @@ src/
 
 ### 中央集権化されたエラーハンドリング
 
-- `src/tools/common/error-handler.ts` - API操作用の中央集権化されたエラーハンドリング
+- `src/api/common/error-handler.ts` - API操作用の中央集権化されたエラーハンドリング
 - 全ツールはtry-catchブロックで一貫したエラーハンドリングを使用
 - OAuthエラーは適応的フォーマット（ブラウザ用HTML、API用JSON）でHTTPエラーレスポンスを返す
 - APIエラーはMCPレスポンス用に適切にフォーマット
@@ -274,6 +283,107 @@ src/
 ### 開発ワークフロー
 
 - 全てのタスクが終了したら、`pnpm type-check`を実行して型エラーがないかを確認してください。型エラーがあったら修正してください
+
+## Biome設定とフォーマッティング
+
+このプロジェクトでは、PrettierからBiomeに移行してコードフォーマッティングとリンティングを統一しています。
+
+### Biome設定（biome.json）
+
+```json
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "ignoreUnknown": false,
+    "includes": [
+      "**/*.ts",
+      "**/*.js",
+      "**/*.json",
+      "**/*.md",
+      "**/*.html",
+      "**/*.css",
+      "**/*.scss",
+      "**/*.yaml",
+      "**/*.yml"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "tab"
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double"
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  }
+}
+```
+
+### フォーマッティング規則
+
+- **インデント**: タブ（4スペース相当）
+- **引用符**: ダブルクォート（"）
+- **自動import整理**: 有効
+- **推奨ルール**: 全て有効
+- **対象ファイル**: TypeScript、JavaScript、JSON、Markdown、HTML、CSS、YAML
+
+### 開発ワークフロー
+
+1. **開発中**: 
+   - エディターでの自動フォーマット設定を推奨
+   - VS Codeの場合：Biome拡張機能をインストール
+
+2. **コミット前**:
+   ```bash
+   pnpm format    # コードフォーマット
+   pnpm lint      # リンティング
+   pnpm fix       # 自動修正可能な問題を修正
+   pnpm type-check # 型チェック
+   ```
+
+3. **CI/CD**:
+   - GitHub ActionsでBiomeによるフォーマット・リンティングチェック
+   - フォーマット違反やリンティングエラーがある場合はビルド失敗
+
+### エディター設定
+
+VS Codeの場合、`.vscode/settings.json`に以下を追加することを推奨：
+
+```json
+{
+  "editor.defaultFormatter": "biomejs.biome",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit"
+  }
+}
+```
+
+### 移行のメリット
+
+- **パフォーマンス**: BiomeはRustで書かれており、Prettierより高速
+- **統一性**: フォーマッティングとリンティングが一つのツールで完結
+- **設定シンプル**: 一つの設定ファイルで全てを管理
+- **IDE統合**: VS Code、WebStorm等で優れた統合サポート
 
 # AI向け MCP Tool 実装ガイドライン
 
@@ -549,7 +659,8 @@ workspaceId; // スコープを明示
 ### 必須チェック
 
 - **コミット前**: 必ず `pnpm type-check` を実行
-- **コードフォーマット**: 必ず `npx prettier --write .` を実行
+- **コードフォーマット**: 必ず `pnpm format` を実行（Biome使用）
+- **リンティング**: 必ず `pnpm lint` を実行
 - **環境構築**: 必要なシークレットとKVネームスペースを設定
 
 ### 開発サーバー
@@ -634,6 +745,143 @@ export class ClickUpClient {
 - `src/tools/` - MCP ツール登録関数
 - `src/handlers/` - HTTP リクエストハンドラー
 - `src/auth/` - 認証関連ロジック
+
+### ClickUp APIクライアント詳細構造
+
+#### 統合クライアント（ClickUpClient）
+
+```typescript
+// src/api/index.ts
+export class ClickUpClient {
+  private auth: ClickUpAuth;
+  private taskBasic: ClickUpTaskBasic;
+  private taskSearch: ClickUpTaskSearch;
+  private advancedSearch: ClickUpAdvancedSearch;
+  private formatters: DataFormatters;
+
+  constructor(deps: ServiceDependencies) {
+    this.auth = new ClickUpAuth(deps);
+    this.taskBasic = new ClickUpTaskBasic(deps);
+    this.taskSearch = new ClickUpTaskSearch(deps);
+    this.advancedSearch = new ClickUpAdvancedSearch(deps);
+    this.formatters = new DataFormatters(deps);
+  }
+
+  // 認証関連
+  async getUserInfo(accessToken: string): Promise<UserInfo>
+  async getWorkspaces(accessToken: string): Promise<Workspace[]>
+
+  // タスク基本操作
+  async getTask(accessToken: string, taskId: string): Promise<Task>
+  async updateTask(accessToken: string, taskId: string, updates: TaskUpdate): Promise<Task>
+  async assignTask(accessToken: string, taskId: string, assigneeIds: string[]): Promise<Task>
+
+  // タスク検索
+  async getMyTasks(accessToken: string, page?: number, limit?: number): Promise<PaginatedTasks>
+  async searchTasks(accessToken: string, query: string, page?: number, limit?: number): Promise<PaginatedTasks>
+  async advancedSearchTasks(accessToken: string, filters: AdvancedSearchFilters): Promise<PaginatedTasks>
+}
+```
+
+#### 基本タスク操作（ClickUpTaskBasic）
+
+```typescript
+// src/api/basic.ts
+export class ClickUpTaskBasic {
+  // タスク詳細取得
+  async getTask(accessToken: string, taskId: string): Promise<Task>
+  
+  // タスク更新（名前、説明、ステータス等）
+  async updateTask(accessToken: string, taskId: string, updates: TaskUpdate): Promise<Task>
+  
+  // 担当者変更
+  async assignTask(accessToken: string, taskId: string, assigneeIds: string[]): Promise<Task>
+  
+  // その他のタスク操作
+  async createTask(accessToken: string, listId: string, taskData: CreateTaskData): Promise<Task>
+  async deleteTask(accessToken: string, taskId: string): Promise<void>
+}
+```
+
+#### タスク検索（ClickUpTaskSearch）
+
+```typescript
+// src/api/search.ts
+export class ClickUpTaskSearch {
+  // 自分のタスク取得
+  async getMyTasks(accessToken: string, page: number = 0, limit: number = 15): Promise<PaginatedTasks>
+  
+  // キーワード検索
+  async searchTasks(accessToken: string, query: string, page: number = 0, limit: number = 15): Promise<PaginatedTasks>
+  
+  // チーム内のタスク取得
+  async getTeamTasks(accessToken: string, teamId: string, page?: number, limit?: number): Promise<PaginatedTasks>
+}
+```
+
+#### 詳細検索（ClickUpAdvancedSearch）
+
+```typescript
+// src/api/advanced-search.ts
+export class ClickUpAdvancedSearch {
+  // 高度な絞り込み検索
+  async advancedSearchTasks(accessToken: string, filters: AdvancedSearchFilters): Promise<PaginatedTasks>
+  
+  // カスタムフィールドによる検索
+  async searchByCustomFields(accessToken: string, customFields: CustomFieldFilter[]): Promise<PaginatedTasks>
+  
+  // 日付範囲による検索
+  async searchByDateRange(accessToken: string, dateRange: DateRangeFilter): Promise<PaginatedTasks>
+  
+  // 複合条件検索
+  async searchWithMultipleFilters(accessToken: string, filters: MultipleFilters): Promise<PaginatedTasks>
+}
+```
+
+#### データフォーマッター（DataFormatters）
+
+```typescript
+// src/utils/formatters.ts
+export class DataFormatters {
+  // タスク情報のフォーマット
+  formatTaskData(task: any): FormattedTask
+  
+  // 日付フォーマット
+  formatTimestamp(timestamp: string | number | null): string | null
+  
+  // ユーザー情報のフォーマット
+  formatUserData(user: any): FormattedUser
+  
+  // ワークスペース情報のフォーマット
+  formatWorkspaceData(workspace: any): FormattedWorkspace
+  
+  // ページネーション情報のフォーマット
+  formatPaginationData(data: any[], total: number, page: number, limit: number): PaginatedResponse
+}
+```
+
+### 依存性注入パターン
+
+```typescript
+// 依存性の型定義
+export interface ServiceDependencies {
+  env: Env;
+  config: AppConfig;
+}
+
+// 各クラスは統一された依存性を受け取る
+export class ClickUpAuth {
+  constructor(private deps: ServiceDependencies) {}
+}
+
+export class ClickUpTaskBasic {
+  constructor(private deps: ServiceDependencies) {}
+}
+
+export class ClickUpTaskSearch {
+  constructor(private deps: ServiceDependencies) {}
+}
+```
 
 ## 4. MCP Tool 実装規則
 
@@ -845,10 +1093,11 @@ props: {
 ### 開発完了時
 
 1. `pnpm type-check` を実行して型エラーがないことを確認
-2. `npx prettier --write .` でコードをフォーマット
-3. 全てのエラーハンドリングが統一されていることを確認
-4. MCPツールの説明文が詳細で具体的であることを確認
-5. 日本語対応が適切であることを確認
+2. `pnpm format` でコードをフォーマット（Biome使用）
+3. `pnpm lint` でリンティングを実行
+4. 全てのエラーハンドリングが統一されていることを確認
+5. MCPツールの説明文が詳細で具体的であることを確認
+6. 日本語対応が適切であることを確認
 
 ### デプロイ前
 

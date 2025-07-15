@@ -4,17 +4,21 @@
  * ユーザー情報やワークスペース取得などの認証関連ツールを提供
  */
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ClickUpClient } from "#/api";
 
 /**
  * 認証・ユーザー関連のMCPツールを登録
  */
-export function registerAuthTools(server: McpServer, clickupClient: ClickUpClient, getAccessToken: () => string) {
-  // ClickUp ユーザー情報取得ツール
-  server.tool(
-    "getUserInfo",
-    `# ユーザー情報取得
+export function registerAuthTools(
+	server: McpServer,
+	clickupClient: ClickUpClient,
+	getAccessToken: () => string,
+) {
+	// ClickUp ユーザー情報取得ツール
+	server.tool(
+		"getUserInfo",
+		`# ユーザー情報取得
 
 ## 用途
 - API接続テスト・認証確認
@@ -31,43 +35,45 @@ export function registerAuthTools(server: McpServer, clickupClient: ClickUpClien
 - **応答時間**: 0.5-1秒
 - **APIコール**: 1回（軽量）
 `,
-    {},
-    {
-      type: "object",
-      properties: {
-        user: {
-          type: "object",
-          properties: {
-            id: { type: "string", description: "ユーザーID" },
-            username: { type: "string", description: "ユーザー名" },
-            email: { type: "string", description: "メールアドレス" },
-          },
-          required: ["id", "username", "email"],
-        },
-      },
-      required: ["user"],
-    },
-    async () => {
-      try {
-        const data = await clickupClient.getUserInfo(getAccessToken());
-        return {
-          content: [
-            {
-              text: JSON.stringify(data, null, 2),
-              type: "text",
-            },
-          ],
-        };
-      } catch (error) {
-        throw new Error(`ユーザー情報の取得に失敗しました: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    },
-  );
+		{},
+		{
+			type: "object",
+			properties: {
+				user: {
+					type: "object",
+					properties: {
+						id: { type: "string", description: "ユーザーID" },
+						username: { type: "string", description: "ユーザー名" },
+						email: { type: "string", description: "メールアドレス" },
+					},
+					required: ["id", "username", "email"],
+				},
+			},
+			required: ["user"],
+		},
+		async () => {
+			try {
+				const data = await clickupClient.getUserInfo(getAccessToken());
+				return {
+					content: [
+						{
+							text: JSON.stringify(data, null, 2),
+							type: "text",
+						},
+					],
+				};
+			} catch (error) {
+				throw new Error(
+					`ユーザー情報の取得に失敗しました: ${error instanceof Error ? error.message : String(error)}`,
+				);
+			}
+		},
+	);
 
-  // ClickUp ワークスペース取得ツール
-  server.tool(
-    "getWorkspaces",
-    `# ワークスペース一覧取得
+	// ClickUp ワークスペース取得ツール
+	server.tool(
+		"getWorkspaces",
+		`# ワークスペース一覧取得
 
 ## 用途
 - 利用可能なチーム・ワークスペースの確認
@@ -89,40 +95,42 @@ export function registerAuthTools(server: McpServer, clickupClient: ClickUpClien
 
 ## 注意点
 このツールで取得したteamIdは他の検索ツールで必須パラメータとして使用`,
-    {},
-    {
-      type: "object",
-      properties: {
-        teams: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              id: { type: "string", description: "チームID" },
-              name: { type: "string", description: "チーム名" },
-              color: { type: "string", description: "チームカラー" },
-              avatar: { type: "string", description: "チームアバター" },
-            },
-            required: ["id", "name"],
-          },
-        },
-      },
-      required: ["teams"],
-    },
-    async () => {
-      try {
-        const data = await clickupClient.getWorkspaces(getAccessToken());
-        return {
-          content: [
-            {
-              text: JSON.stringify(data, null, 2),
-              type: "text",
-            },
-          ],
-        };
-      } catch (error) {
-        throw new Error(`ワークスペース情報の取得に失敗しました: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    },
-  );
+		{},
+		{
+			type: "object",
+			properties: {
+				teams: {
+					type: "array",
+					items: {
+						type: "object",
+						properties: {
+							id: { type: "string", description: "チームID" },
+							name: { type: "string", description: "チーム名" },
+							color: { type: "string", description: "チームカラー" },
+							avatar: { type: "string", description: "チームアバター" },
+						},
+						required: ["id", "name"],
+					},
+				},
+			},
+			required: ["teams"],
+		},
+		async () => {
+			try {
+				const data = await clickupClient.getWorkspaces(getAccessToken());
+				return {
+					content: [
+						{
+							text: JSON.stringify(data, null, 2),
+							type: "text",
+						},
+					],
+				};
+			} catch (error) {
+				throw new Error(
+					`ワークスペース情報の取得に失敗しました: ${error instanceof Error ? error.message : String(error)}`,
+				);
+			}
+		},
+	);
 }
