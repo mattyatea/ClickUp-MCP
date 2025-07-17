@@ -36,7 +36,7 @@ export class ClickUpTaskSearch {
 			const userInfo = await this.auth.getUserInfo(accessToken);
 			const userId = userInfo.user.id;
 
-			let teams;
+			let teams: any[];
 			if (teamId) {
 				// 特定のチームのみ
 				const workspacesData = await this.auth.getWorkspaces(accessToken);
@@ -130,7 +130,7 @@ export class ClickUpTaskSearch {
 		page: number = 0,
 	) {
 		try {
-			let teams;
+			let teams: any[];
 			if (teamId) {
 				// 特定のチームのみ
 				const workspacesData = await this.auth.getWorkspaces(accessToken);

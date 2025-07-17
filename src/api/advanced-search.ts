@@ -83,7 +83,7 @@ export class ClickUpAdvancedSearch {
 	) {
 		try {
 			// チーム情報を取得
-			let teams;
+			let teams: any[];
 			if (filters.teamId) {
 				const workspacesData = await this.auth.getWorkspaces(accessToken);
 				const team = workspacesData.teams.find((t) => t.id === filters.teamId);
